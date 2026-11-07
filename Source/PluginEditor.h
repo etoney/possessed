@@ -13,7 +13,7 @@ public:
     void drawButtonBackground (juce::Graphics&, juce::Button&, const juce::Colour&, bool hi, bool down) override;
 };
 
-// A pair of glowing, slit-pupilled demon eyes that watch, blink and flare with the signal.
+// A pair of burning demon eyes that watch, blink and flare with the signal.
 class DemonEyes : public juce::Component
 {
 public:
@@ -22,7 +22,7 @@ public:
 private:
     void drawEye (juce::Graphics&, juce::Point<float> c, float w, float h, float tilt, bool mirror);
     float glow = 0.3f, openness = 1.0f, blinkTimer = 3.0f, blinkPhase = -1.0f;
-    float lookX = 0, lookTargetX = 0, lookY = 0, lookTargetY = 0, lookTimer = 1.0f, dilate = 0.0f, time = 0;
+    float lookX = 0, lookTargetX = 0, lookY = 0, lookTargetY = 0, lookTimer = 1.0f, dilate = 0.0f, time = 0, fire = 0;
     juce::Random rnd;
 };
 

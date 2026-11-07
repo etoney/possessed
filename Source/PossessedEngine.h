@@ -1,4 +1,4 @@
-// POSSESSED — evil voice transformer DSP engine.
+// POSSESSED — Pure Vocal Destruction (voice transformer DSP engine).
 // Self-contained (no JUCE) so it can be tested offline.
 #pragma once
 #include <algorithm>

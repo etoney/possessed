@@ -99,6 +99,7 @@ void PossessedLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button
 void DemonEyes::update (float level, float dt)
 {
     time += dt;
+    fire += ((rnd.nextFloat() * 2.0f - 1.0f) - fire) * std::min (1.0f, dt * 12.0f);
     const float targetGlow = juce::jlimit (0.0f, 1.0f, 0.25f + std::sqrt (level) * 1.4f);
     glow += (targetGlow - glow) * std::min (1.0f, dt * (targetGlow > glow ? 14.0f : 2.5f));
     dilate += ((level > 0.25f ? 1.0f : 0.0f) - dilate) * std::min (1.0f, dt * 3.0f);
@@ -131,81 +132,106 @@ void DemonEyes::drawEye (juce::Graphics& g, juce::Point<float> c, float w, float
 {
     using namespace colours;
     const float sx = mirror ? -1.0f : 1.0f;
-    const float oh = h * std::max (0.03f, openness);
-
-    // almond with a sharp, angry inner corner (inner corner = +x for the left eye)
-    juce::Path eye;
-    eye.startNewSubPath (-w * 0.5f, -h * 0.05f);
-    eye.cubicTo (-w * 0.25f, -oh * 1.05f, w * 0.22f, -oh * 0.95f, w * 0.5f, oh * 0.18f);
-    eye.cubicTo (w * 0.2f, oh * 0.75f, -w * 0.25f, oh * 0.7f, -w * 0.5f, -h * 0.05f);
-    eye.closeSubPath();
+    const float oh = h * std::max (0.04f, openness);
     const auto xf = juce::AffineTransform::scale (sx, 1.0f).rotated (tilt * sx).translated (c);
+    const float heat = juce::jlimit (0.0f, 1.0f, glow * (0.85f + 0.15f * fire));
+
+    // narrow, angular eye: outer corner high, upper lid slashing down to a sharp inner corner
+    juce::Path eye;
+    eye.startNewSubPath (-w * 0.52f, -h * 0.42f);
+    eye.cubicTo (-w * 0.25f, -h * 0.2f - oh * 0.55f, w * 0.15f, -oh * 0.25f, w * 0.5f, h * 0.3f);
+    eye.cubicTo (w * 0.15f, h * 0.22f + oh * 0.4f, -w * 0.3f, oh * 0.42f, -w * 0.52f, -h * 0.42f);
+    eye.closeSubPath();
     eye.applyTransform (xf);
 
-    // brow shadow / ridge
-    {
-        juce::Path brow;
-        brow.startNewSubPath (-w * 0.65f, -h * 0.55f);
-        brow.quadraticTo (-w * 0.1f, -h * 1.25f, w * 0.62f, -h * 0.25f);
-        brow.quadraticTo (w * 0.1f, -h * 0.75f, -w * 0.65f, -h * 0.55f);
-        brow.closeSubPath();
-        brow.applyTransform (xf);
-        g.setColour (juce::Colour (0xff000000).withAlpha (0.85f)); g.fillPath (brow);
-        g.setColour (blood.withAlpha (0.15f + 0.25f * glow)); g.strokePath (brow, juce::PathStrokeType (1.0f));
-    }
-
-    // outer glow
-    const float gl = glow * std::sqrt (openness);
-    juce::DropShadow (blood.withAlpha (0.55f * gl), (int) (w * 0.55f), {}).drawForPath (g, eye);
-    juce::DropShadow (ember.withAlpha (0.45f * gl), (int) (w * 0.18f), {}).drawForPath (g, eye);
+    // heat haze around the socket
+    juce::DropShadow (blood.withAlpha (0.9f * heat), (int) (w * 0.45f), {}).drawForPath (g, eye);
+    juce::DropShadow (blood.withAlpha (0.8f * heat), (int) (w * 0.22f), {}).drawForPath (g, eye);
+    juce::DropShadow (ember.withAlpha (0.8f * heat), (int) (w * 0.08f), {}).drawForPath (g, eye);
 
     {
         juce::Graphics::ScopedSaveState ss (g);
         g.reduceClipRegion (eye);
-        const auto iris = c + juce::Point<float> (lookX * w * 0.17f, lookY * h * 0.3f);
-        const float ir = w * 0.36f;
-        juce::ColourGradient grad (juce::Colour (0xfffff3a0).withMultipliedBrightness (0.6f + 0.4f * glow), iris.x, iris.y,
-                                   juce::Colour (0xff1a0000), iris.x + ir * 1.3f, iris.y, true);
-        grad.addColour (0.18, juce::Colour (0xffffc23a).withMultipliedBrightness (0.55f + 0.45f * glow));
-        grad.addColour (0.45, juce::Colour (0xffff5a0a).withMultipliedBrightness (0.5f + 0.5f * glow));
-        grad.addColour (0.75, juce::Colour (0xffa00008));
+        const auto core = c + juce::Point<float> (lookX * w * 0.16f, h * 0.08f + lookY * h * 0.2f);
+        const float R = w * 0.5f;
+        juce::ColourGradient grad (juce::Colour (0xfffffbe8).withMultipliedBrightness (0.55f + 0.45f * heat), core.x, core.y,
+                                   juce::Colour (0xff120000), core.x + R * 1.1f, core.y, true);
+        grad.addColour (0.10, juce::Colour (0xffffe27a).withMultipliedBrightness (0.5f + 0.5f * heat));
+        grad.addColour (0.32, juce::Colour (0xffff7410).withMultipliedBrightness (0.45f + 0.55f * heat));
+        grad.addColour (0.62, juce::Colour (0xffc40812));
+        grad.addColour (0.85, juce::Colour (0xff4a0004));
         g.setGradientFill (grad);
         g.fillPath (eye);
 
-        // veins radiating from the pupil
-        g.setColour (juce::Colour (0xff3a0000).withAlpha (0.55f));
-        for (int i = 0; i < 18; ++i)
+        // molten streaks
+        juce::Random rnd (mirror ? 5 : 9);
+        g.setColour (juce::Colour (0xff5a0000).withAlpha (0.5f));
+        for (int i = 0; i < 12; ++i)
         {
-            const float a = (float) i / 18.0f * juce::MathConstants<float>::twoPi + 0.3f;
-            const float r0 = ir * (0.25f + 0.05f * (float) (i % 3)), r1 = ir * (0.85f + 0.15f * (float) ((i * 7) % 4) / 3.0f);
-            g.drawLine (iris.x + std::cos (a) * r0, iris.y + std::sin (a) * r0, iris.x + std::cos (a) * r1, iris.y + std::sin (a) * r1, 0.8f);
+            const float a = rnd.nextFloat() * juce::MathConstants<float>::twoPi;
+            const float r0 = R * (0.18f + rnd.nextFloat() * 0.1f), r1 = R * (0.6f + rnd.nextFloat() * 0.5f);
+            g.drawLine (core.x + std::cos (a) * r0, core.y + std::sin (a) * r0 * 0.6f, core.x + std::cos (a) * r1, core.y + std::sin (a) * r1 * 0.6f, 0.9f);
         }
 
-        // slit pupil
-        const float pw = w * (0.05f + 0.11f * dilate), ph = h * 1.7f;
-        juce::Path pupil; pupil.addEllipse (-pw * 0.5f, -ph * 0.5f, pw, ph);
-        pupil.applyTransform (juce::AffineTransform::rotation (tilt * sx * 0.3f).translated (iris));
-        juce::DropShadow (juce::Colour (0xff300000), 6, {}).drawForPath (g, pupil);
-        g.setColour (juce::Colours::black); g.fillPath (pupil);
+        // a small black void at the centre of the fire, ringed by a burning rim
+        const float pr = w * (0.045f + 0.025f * (1.0f - dilate));
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff8a0000).withAlpha (0.0f), core.x, core.y,
+                                                 juce::Colour (0xffff3000).withAlpha (0.0f), core.x + pr * 2.4f, core.y, true));
+        juce::ColourGradient rim (juce::Colour (0xff000000), core.x, core.y, juce::Colour (0x00ff2000), core.x + pr * 2.4f, core.y, true);
+        rim.addColour (0.38, juce::Colour (0xff000000));
+        rim.addColour (0.5, juce::Colour (0xffb00000));
+        rim.addColour (0.7, juce::Colour (0x80ff3000));
+        g.setGradientFill (rim);
+        g.fillEllipse (core.x - pr * 2.4f, core.y - pr * 2.4f, pr * 4.8f, pr * 4.8f);
 
-        // wet highlight
-        g.setColour (juce::Colours::white.withAlpha (0.35f + 0.3f * glow));
-        g.fillEllipse (iris.x - ir * 0.42f, iris.y - h * 0.32f, w * 0.06f, w * 0.045f);
-
-        // upper lid shadow
-        g.setGradientFill (juce::ColourGradient (juce::Colours::black.withAlpha (0.75f), c.x, c.y - oh, juce::Colours::transparentBlack, c.x, c.y - oh * 0.2f, false));
+        // lids burn darker at the edges
+        g.setGradientFill (juce::ColourGradient (juce::Colours::black.withAlpha (0.85f), c.x, c.y - oh * 0.9f,
+                                                 juce::Colours::transparentBlack, c.x, c.y - oh * 0.05f, false));
         g.fillPath (eye);
     }
-    g.setColour (juce::Colours::black); g.strokePath (eye, juce::PathStrokeType (2.0f));
+    g.setColour (juce::Colours::black); g.strokePath (eye, juce::PathStrokeType (2.5f));
+
+    // heavy, knotted brow bearing down on the eye, sloping hard toward the nose
+    {
+        juce::Path brow;
+        brow.startNewSubPath (-w * 0.7f, -h * 0.55f);
+        brow.cubicTo (-w * 0.3f, -h * 0.45f - h * 0.35f, w * 0.15f, -h * 0.55f, w * 0.6f, h * 0.22f);   // lower edge, hugging the lid
+        brow.cubicTo (w * 0.45f, -h * 0.5f, -w * 0.1f, -h * 1.25f, -w * 0.62f, -h * 1.05f);              // top of the ridge
+        brow.quadraticTo (-w * 0.78f, -h * 0.85f, -w * 0.7f, -h * 0.55f);
+        brow.closeSubPath();
+        brow.applyTransform (xf);
+        juce::ColourGradient bg (juce::Colour (0xff2a1210), c.x - w * 0.2f * sx, c.y - h * 1.1f, juce::Colour (0xff030101), c.x + w * 0.2f * sx, c.y, false);
+        g.setGradientFill (bg);
+        g.fillPath (brow);
+        g.setColour (juce::Colours::black); g.strokePath (brow, juce::PathStrokeType (1.0f));
+
+        juce::Path edge; // fire catching the underside of the brow
+        edge.startNewSubPath (-w * 0.7f, -h * 0.55f);
+        edge.cubicTo (-w * 0.3f, -h * 0.45f - h * 0.35f, w * 0.15f, -h * 0.55f, w * 0.6f, h * 0.22f);
+        edge.applyTransform (xf);
+        g.setColour (bloodHot.withAlpha (0.3f + 0.55f * heat)); g.strokePath (edge, juce::PathStrokeType (1.6f));
+
+    }
 }
 
 void DemonEyes::paint (juce::Graphics& g)
 {
     auto b = getLocalBounds().toFloat();
-    const float ew = b.getWidth() * 0.34f, eh = std::min (b.getHeight() * 0.32f, ew * 0.42f);
-    const float cy = b.getCentreY() + eh * 0.2f;
-    drawEye (g, { b.getCentreX() - b.getWidth() * 0.22f, cy }, ew, eh, 0.22f, false);
-    drawEye (g, { b.getCentreX() + b.getWidth() * 0.22f, cy }, ew, eh, 0.22f, true);
+    const float ew = b.getWidth() * 0.31f, eh = std::min (b.getHeight() * 0.36f, ew * 0.5f);
+    const float cy = b.getCentreY() + eh * 0.35f, dx = b.getWidth() * 0.235f;
+    drawEye (g, { b.getCentreX() - dx, cy }, ew, eh, 0.1f, false);
+    drawEye (g, { b.getCentreX() + dx, cy }, ew, eh, 0.1f, true);
+
+    // deep angry furrow between the brows
+    const float fx = b.getCentreX();
+    for (int i = -1; i <= 1; i += 2)
+    {
+        juce::Path f;
+        f.startNewSubPath (fx + (float) i * ew * 0.05f, cy - eh * 1.25f);
+        f.quadraticTo (fx + (float) i * ew * 0.13f, cy - eh * 0.55f, fx + (float) i * ew * 0.07f, cy + eh * 0.05f);
+        g.setColour (juce::Colours::black.withAlpha (0.85f)); g.strokePath (f, juce::PathStrokeType (2.0f));
+        g.setColour (colours::blood.withAlpha (0.25f * glow)); g.strokePath (f, juce::PathStrokeType (0.7f), juce::AffineTransform::translation ((float) i, 0));
+    }
 }
 
 //==============================================================================
@@ -447,7 +473,7 @@ void PossessedEditor::paint (juce::Graphics& g)
     }
 
     g.setColour (ash); g.setFont (font (12.0f));
-    g.drawText ("evil voice transformer  v" JucePlugin_VersionString, 24, 100, 300, 16, juce::Justification::centredLeft);
+    g.drawText ("Pure Vocal Destruction  v" JucePlugin_VersionString, 24, 100, 300, 16, juce::Justification::centredLeft);
     g.setColour (bone); g.setFont (font (13.0f, true));
     g.drawText ("C A S T L E   D A N G E R   M C", 24, 120, 320, 18, juce::Justification::centredLeft);
 
