@@ -164,12 +164,12 @@ void DemonEyes::drawEye (juce::Graphics& g, juce::Point<float> c, float w, float
         g.fillPath (eye);
 
         // molten streaks
-        juce::Random rnd (mirror ? 5 : 9);
+        juce::Random streakRnd (mirror ? 5 : 9);
         g.setColour (juce::Colour (0xff5a0000).withAlpha (0.5f));
         for (int i = 0; i < 12; ++i)
         {
-            const float a = rnd.nextFloat() * juce::MathConstants<float>::twoPi;
-            const float r0 = R * (0.18f + rnd.nextFloat() * 0.1f), r1 = R * (0.6f + rnd.nextFloat() * 0.5f);
+            const float a = streakRnd.nextFloat() * juce::MathConstants<float>::twoPi;
+            const float r0 = R * (0.18f + streakRnd.nextFloat() * 0.1f), r1 = R * (0.6f + streakRnd.nextFloat() * 0.5f);
             g.drawLine (core.x + std::cos (a) * r0, core.y + std::sin (a) * r0 * 0.6f, core.x + std::cos (a) * r1, core.y + std::sin (a) * r1 * 0.6f, 0.9f);
         }
 
