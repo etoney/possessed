@@ -38,6 +38,9 @@ PossessedLookAndFeel::PossessedLookAndFeel()
     setColour (juce::PopupMenu::textColourId, bone);
     setColour (juce::PopupMenu::highlightedBackgroundColourId, blood);
     setColour (juce::TextButton::textColourOffId, bone);
+    setColour (juce::AlertWindow::backgroundColourId, juce::Colour (0xff100707));
+    setColour (juce::AlertWindow::textColourId, bone);
+    setColour (juce::AlertWindow::outlineColourId, blood);
     setColour (juce::TextButton::textColourOnId, bloodHot);
 }
 
@@ -258,19 +261,24 @@ PossessedEditor::PossessedEditor (PossessedProcessor& p)
     sec ("DELAY",   { makeKnob ("delayMix", "Mix"), makeKnob ("delayTime", "Time"), makeKnob ("delayFeedback", "Feedback") });
     sec ("REVERB",  { makeKnob ("reverbMix", "Mix"), makeKnob ("reverbSize", "Size") });
 
-    for (int i = 0; i < proc.getNumPrograms(); ++i) presetBox.addItem (proc.getProgramName (i), i + 1);
-    presetBox.setSelectedId (proc.getCurrentProgram() + 1, juce::dontSendNotification);
-    presetBox.onChange = [this] { proc.setCurrentProgram (presetBox.getSelectedId() - 1); };
-    addAndMakeVisible (presetBox);
-    auto step = [this] (int d)
+    presetBox.onChange = [this]
     {
-        const int n = proc.getNumPrograms();
-        proc.setCurrentProgram ((proc.getCurrentProgram() + d + n) % n);
-        presetBox.setSelectedId (proc.getCurrentProgram() + 1, juce::dontSendNotification);
+        const int id = presetBox.getSelectedId();
+        if (id >= kUserIdBase && id - kUserIdBase < userFiles.size())
+        {
+            if (! proc.loadUserPreset (userFiles[id - kUserIdBase]))
+                showMessage ("Couldn't load preset", "That preset file is missing or damaged.");
+        }
+        else if (id >= 1 && id <= proc.getNumPrograms())
+            proc.setCurrentProgram (id - 1);
     };
-    prevButton.onClick = [step] { step (-1); };
-    nextButton.onClick = [step] { step (1); };
-    addAndMakeVisible (prevButton); addAndMakeVisible (nextButton);
+    addAndMakeVisible (presetBox);
+    prevButton.onClick = [this] { stepPreset (-1); };
+    nextButton.onClick = [this] { stepPreset (1); };
+    saveButton.onClick = [this] { promptSave(); };
+    deleteButton.onClick = [this] { confirmDelete(); };
+    for (auto* b : { &prevButton, &nextButton, &saveButton, &deleteButton }) addAndMakeVisible (*b);
+    refreshPresetBox();
 
     distTypeBox.addItemList ({ "Tube", "Fuzz", "Bitcrush", "Radio" }, 1);
     filterTypeBox.addItemList ({ "Off", "Low-pass", "Band-pass", "High-pass" }, 1);
@@ -326,6 +334,10 @@ void PossessedEditor::resized()
     prevButton.setBounds (presetRow.removeFromLeft (28));
     nextButton.setBounds (presetRow.removeFromRight (28));
     presetBox.setBounds (presetRow.reduced (4, 0));
+    auto buttonRow = juce::Rectangle<int> (presetBox.getX(), presetBox.getBottom() + 8, presetBox.getWidth(), 24);
+    deleteButton.setBounds (buttonRow.removeFromRight (70));
+    buttonRow.removeFromRight (6);
+    saveButton.setBounds (buttonRow);
     eyes.setBounds (header.withSizeKeepingCentre (360, 150).translated (95, 0));
     r.removeFromTop (6);
 
@@ -514,8 +526,202 @@ void PossessedEditor::timerCallback()
     auto& rnd = juce::Random::getSystemRandom();
     flicker = (rnd.nextFloat() < 0.04f + outMeter * 0.3f) ? rnd.nextFloat() : flicker * 0.5f;
 
-    if (presetBox.getSelectedId() != proc.getCurrentProgram() + 1)
-        presetBox.setSelectedId (proc.getCurrentProgram() + 1, juce::dontSendNotification);
+    if (proc.presetVersion.load() != lastPresetVersion) refreshPresetBox();
     repaint (0, 0, 380, 150);
     if (! meterArea.isEmpty()) repaint (meterArea);
+}
+
+//==============================================================================
+void PossessedEditor::refreshPresetBox()
+{
+    lastPresetVersion = proc.presetVersion.load();
+    userFiles = PossessedProcessor::getUserPresets();
+    const auto current = proc.getCurrentPresetName();
+
+    presetBox.clear (juce::dontSendNotification);
+    presetBox.addSectionHeading ("Factory");
+    for (int i = 0; i < proc.getNumPrograms(); ++i) presetBox.addItem (proc.getProgramName (i), i + 1);
+    presetBox.addSeparator();
+    presetBox.addSectionHeading ("User Presets");
+    if (userFiles.isEmpty()) { presetBox.addItem ("(none saved yet)", 999); presetBox.setItemEnabled (999, false); }
+    for (int i = 0; i < userFiles.size(); ++i) presetBox.addItem (userFiles[i].getFileNameWithoutExtension(), kUserIdBase + i);
+
+    int selected = 0;
+    for (int i = 0; i < userFiles.size() && selected == 0; ++i)
+        if (userFiles[i] == PossessedProcessor::fileForPresetName (current)) selected = kUserIdBase + i;
+    for (int i = 0; i < proc.getNumPrograms() && selected == 0; ++i)
+        if (proc.getProgramName (i) == current) selected = i + 1;
+    if (selected != 0) presetBox.setSelectedId (selected, juce::dontSendNotification);
+    else presetBox.setText (current, juce::dontSendNotification);
+    deleteButton.setEnabled (selected >= kUserIdBase);
+}
+
+void PossessedEditor::stepPreset (int delta)
+{
+    std::vector<int> ids;
+    for (int i = 0; i < proc.getNumPrograms(); ++i) ids.push_back (i + 1);
+    for (int i = 0; i < userFiles.size(); ++i) ids.push_back (kUserIdBase + i);
+    auto it = std::find (ids.begin(), ids.end(), presetBox.getSelectedId());
+    const int pos = it == ids.end() ? 0 : (int) (it - ids.begin());
+    const int n = (int) ids.size();
+    presetBox.setSelectedId (ids[(size_t) (((pos + delta) % n + n) % n)], juce::sendNotificationSync);
+}
+
+void PossessedEditor::showDialog (const juce::String& title, const juce::String& message, bool withTextField, const juce::String& initialText,
+                                  juce::StringArray buttons, std::function<void (int, const juce::String&)> onResult)
+{
+    juce::Component::SafePointer<PossessedEditor> safe (this);
+    dialog = std::make_unique<PresetDialog> (title, message, withTextField, initialText, buttons,
+        [safe, onResult] (int index, const juce::String& text)
+        {
+            // close first, then act (the result may open another dialog)
+            juce::MessageManager::callAsync ([safe, onResult, index, text]
+            {
+                if (safe == nullptr) return;
+                safe->dialog.reset();
+                if (onResult) onResult (index, text);
+            });
+        });
+    addAndMakeVisible (*dialog);
+    dialog->setBounds (getLocalBounds());
+}
+
+void PossessedEditor::showMessage (const juce::String& title, const juce::String& text)
+{
+    showDialog (title, text, false, {}, { "OK" }, {});
+}
+
+void PossessedEditor::promptSave()
+{
+    const bool onUser = presetBox.getSelectedId() >= kUserIdBase;
+    juce::Component::SafePointer<PossessedEditor> safe (this);
+    auto doSave = [safe] (const juce::String& name)
+    {
+        if (safe == nullptr) return;
+        if (! safe->proc.saveUserPreset (name))
+            safe->showMessage ("Couldn't save preset", "Possessed couldn't write the preset file to:\n"
+                                                         + PossessedProcessor::getUserPresetFolder().getFullPathName());
+        else safe->refreshPresetBox();
+    };
+
+    showDialog ("SAVE PRESET", "Name your preset:", true, onUser ? proc.getCurrentPresetName() : juce::String(), { "Save", "Cancel" },
+        [safe, doSave] (int button, const juce::String& text)
+        {
+            if (button != 0 || safe == nullptr) return;
+            const auto name = text.trim();
+            if (name.isEmpty()) { safe->showMessage ("SAVE PRESET", "Please enter a name for the preset."); return; }
+            for (int i = 0; i < safe->proc.getNumPrograms(); ++i)
+                if (safe->proc.getProgramName (i).equalsIgnoreCase (name))
+                {
+                    safe->showMessage ("SAVE PRESET", "\"" + name + "\" is a factory preset name. Please choose another name.");
+                    return;
+                }
+            if (PossessedProcessor::fileForPresetName (name).existsAsFile())
+            {
+                safe->showDialog ("REPLACE PRESET?", "A preset named \"" + name + "\" already exists. Replace it with the current settings?",
+                                  false, {}, { "Replace", "Cancel" },
+                                  [doSave, name] (int b, const juce::String&) { if (b == 0) doSave (name); });
+                return;
+            }
+            doSave (name);
+        });
+}
+
+void PossessedEditor::confirmDelete()
+{
+    const int id = presetBox.getSelectedId();
+    if (id < kUserIdBase || id - kUserIdBase >= userFiles.size()) return;
+    const auto file = userFiles[id - kUserIdBase];
+    juce::Component::SafePointer<PossessedEditor> safe (this);
+    showDialog ("DELETE PRESET?", "Delete \"" + file.getFileNameWithoutExtension() + "\"? This can't be undone.", false, {},
+                { "Delete", "Cancel" }, [safe, file] (int b, const juce::String&)
+                {
+                    if (b != 0 || safe == nullptr) return;
+                    file.deleteFile();
+                    safe->refreshPresetBox();
+                });
+}
+
+//==============================================================================
+PresetDialog::PresetDialog (const juce::String& t, const juce::String& m, bool withTextField, const juce::String& initialText,
+                            juce::StringArray names, std::function<void (int, const juce::String&)> cb)
+    : title (t), message (m), hasField (withTextField), onClose (std::move (cb))
+{
+    setWantsKeyboardFocus (true);
+    if (hasField)
+    {
+        field.setText (initialText, false);
+        field.setInputRestrictions (60);
+        field.setSelectAllWhenFocused (true);
+        field.setFont (font (15.0f));
+        field.setIndents (8, 6);
+        field.setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff070303));
+        field.setColour (juce::TextEditor::outlineColourId, colours::edge);
+        field.setColour (juce::TextEditor::focusedOutlineColourId, colours::bloodHot);
+        field.setColour (juce::TextEditor::textColourId, colours::bone);
+        field.setColour (juce::TextEditor::highlightColourId, colours::blood.withAlpha (0.6f));
+        field.setColour (juce::CaretComponent::caretColourId, colours::bloodHot);
+        field.onReturnKey = [this] { finish (0); };
+        field.onEscapeKey = [this] { finish ((int) buttons.size() - 1); };
+        addAndMakeVisible (field);
+    }
+    for (int i = 0; i < names.size(); ++i)
+    {
+        auto* b = buttons.add (new juce::TextButton (names[i]));
+        b->onClick = [this, i] { finish (i); };
+        addAndMakeVisible (b);
+    }
+}
+
+void PresetDialog::parentHierarchyChanged()
+{
+    if (isShowing())
+        juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<PresetDialog> (this)]
+        {
+            if (sp == nullptr) return;
+            if (sp->hasField) sp->field.grabKeyboardFocus(); else sp->grabKeyboardFocus();
+        });
+}
+
+void PresetDialog::finish (int index)
+{
+    if (onClose == nullptr) return;
+    auto cb = std::move (onClose);
+    onClose = nullptr;
+    cb (index, field.getText());
+}
+
+bool PresetDialog::keyPressed (const juce::KeyPress& k)
+{
+    if (k == juce::KeyPress::returnKey) { finish (0); return true; }
+    if (k == juce::KeyPress::escapeKey) { finish ((int) buttons.size() - 1); return true; }
+    return true; // keep keys from leaking to the host while the dialog is open
+}
+
+void PresetDialog::resized()
+{
+    panel = getLocalBounds().withSizeKeepingCentre (380, hasField ? 190 : 160);
+    auto r = panel.reduced (20);
+    r.removeFromTop (30); // title
+    r.removeFromTop (hasField ? 22 : 50); // message
+    if (hasField) { field.setBounds (r.removeFromTop (32)); r.removeFromTop (16); }
+    auto row = r.removeFromBottom (28);
+    for (int i = (int) buttons.size() - 1; i >= 0; --i) { buttons[i]->setBounds (row.removeFromRight (96)); row.removeFromRight (8); }
+}
+
+void PresetDialog::paint (juce::Graphics& g)
+{
+    using namespace colours;
+    g.fillAll (juce::Colours::black.withAlpha (0.72f));
+    auto p = panel.toFloat();
+    juce::Path shape; shape.addRoundedRectangle (p, 6.0f);
+    juce::DropShadow (blood.withAlpha (0.6f), 28, {}).drawForPath (g, shape);
+    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff1c0c0b), p.getX(), p.getY(), juce::Colour (0xff080404), p.getX(), p.getBottom(), false));
+    g.fillPath (shape);
+    g.setColour (blood); g.strokePath (shape, juce::PathStrokeType (1.2f));
+    auto r = panel.reduced (20);
+    g.setColour (bloodHot); g.setFont (font (16.0f, true).withExtraKerningFactor (0.12f));
+    g.drawText (title, r.removeFromTop (30), juce::Justification::centredLeft);
+    g.setColour (bone); g.setFont (font (13.0f));
+    g.drawFittedText (message, r.removeFromTop (hasField ? 22 : 50), juce::Justification::topLeft, 3);
 }

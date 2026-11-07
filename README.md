@@ -21,6 +21,10 @@ The voice engine auto-matches loudness, so pitch, formant and whisper changes do
 
 **14 factory presets:** Init (Clean), Demon, Disturbed Child, The Haunting, Possessed, Legion, Hellhound, Ghost Whisper, The Entity, Backwards Prayer, Static From Beyond, Old Witch, The Abyss, Siren of the Dead. Changing presets keeps your Input gain.
 
+**Your own presets:** dial in a sound and click **Save Preset...**, then type a name. Saved presets show up under **User Presets** in the preset menu (and in the < > arrows) in every project and every DAW. **Delete** removes the selected user preset. They're stored as small `.possessed` files you can back up or share:
+- macOS: `~/Library/Application Support/Castle Danger/Possessed/Presets/`  (open Finder → Go → Go to Folder…)
+- Windows: `%APPDATA%\Castle Danger\Possessed\Presets\`
+
 The header's demon eyes react to the signal. They glow, dilate, look around and blink.
 
 ## Building

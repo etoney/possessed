@@ -130,6 +130,7 @@ void PossessedProcessor::setCurrentProgram (int index)
 {
     if (! juce::isPositiveAndBelow (index, getNumPrograms())) return;
     currentProgram = index;
+    currentPresetName = poss::factoryPresets()[(size_t) index].name;
     for (auto* p : getParameters())
         if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
             if (rp->getParameterID() != "inputDb") // keep the user's input gain staging
@@ -137,12 +138,81 @@ void PossessedProcessor::setCurrentProgram (int index)
     for (auto& [id, v] : poss::factoryPresets()[(size_t) index].values)
         if (auto* rp = apvts.getParameter (id))
             rp->setValueNotifyingHost (rp->convertTo0to1 (v));
+    ++presetVersion;
+}
+
+//==============================================================================
+juce::File PossessedProcessor::getUserPresetFolder()
+{
+    auto base = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory); // ~/Library on macOS, %APPDATA% on Windows
+   #if JUCE_MAC
+    base = base.getChildFile ("Application Support");
+   #endif
+    return base.getChildFile ("Castle Danger").getChildFile ("Possessed").getChildFile ("Presets");
+}
+
+juce::Array<juce::File> PossessedProcessor::getUserPresets()
+{
+    auto files = getUserPresetFolder().findChildFiles (juce::File::findFiles, false, "*.possessed");
+    std::sort (files.begin(), files.end(), [] (const juce::File& a, const juce::File& b)
+               { return a.getFileNameWithoutExtension().compareNatural (b.getFileNameWithoutExtension()) < 0; });
+    return files;
+}
+
+juce::File PossessedProcessor::fileForPresetName (const juce::String& name)
+{
+    return getUserPresetFolder().getChildFile (juce::File::createLegalFileName (name.trim()) + ".possessed");
+}
+
+bool PossessedProcessor::saveUserPreset (const juce::String& rawName)
+{
+    const auto name = rawName.trim();
+    if (name.isEmpty()) return false;
+    const auto file = fileForPresetName (name);
+    if (! file.getParentDirectory().createDirectory()) return false;
+
+    juce::XmlElement xml ("PossessedPreset");
+    xml.setAttribute ("name", name);
+    xml.setAttribute ("pluginVersion", JucePlugin_VersionString);
+    for (auto* p : getParameters())
+        if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
+        {
+            auto* e = xml.createNewChildElement ("PARAM");
+            e->setAttribute ("id", rp->getParameterID());
+            e->setAttribute ("value", (double) rp->convertFrom0to1 (rp->getValue()));
+        }
+    if (! xml.writeTo (file)) return false;
+    currentPresetName = name;
+    ++presetVersion;
+    return true;
+}
+
+bool PossessedProcessor::loadUserPreset (const juce::File& file)
+{
+    auto xml = juce::XmlDocument::parse (file);
+    if (xml == nullptr || ! xml->hasTagName ("PossessedPreset")) return false;
+    // Start from defaults so parameters added in later versions behave sensibly
+    for (auto* p : getParameters())
+        if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
+            if (rp->getParameterID() != "inputDb")
+                rp->setValueNotifyingHost (rp->getDefaultValue());
+    for (auto* e : xml->getChildWithTagNameIterator ("PARAM"))
+    {
+        const auto id = e->getStringAttribute ("id");
+        if (id == "inputDb") continue; // like factory presets, keep the user's input gain staging
+        if (auto* rp = apvts.getParameter (id))
+            rp->setValueNotifyingHost (rp->convertTo0to1 ((float) e->getDoubleAttribute ("value")));
+    }
+    currentPresetName = xml->getStringAttribute ("name", file.getFileNameWithoutExtension());
+    ++presetVersion;
+    return true;
 }
 
 void PossessedProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     state.setProperty ("program", currentProgram, nullptr);
+    state.setProperty ("presetName", currentPresetName, nullptr);
     if (auto xml = state.createXml()) copyXmlToBinary (*xml, destData);
 }
 
@@ -153,7 +223,9 @@ void PossessedProcessor::setStateInformation (const void* data, int sizeInBytes)
         {
             auto vt = juce::ValueTree::fromXml (*xml);
             currentProgram = vt.getProperty ("program", 0);
+            currentPresetName = vt.getProperty ("presetName", getProgramName (currentProgram)).toString();
             apvts.replaceState (vt);
+            ++presetVersion;
         }
 }
 

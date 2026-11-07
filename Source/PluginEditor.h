@@ -26,6 +26,28 @@ private:
     juce::Random rnd;
 };
 
+// In-window modal dialog (message, confirm, or text entry), drawn over the editor
+class PresetDialog : public juce::Component
+{
+public:
+    PresetDialog (const juce::String& title, const juce::String& message, bool withTextField,
+                  const juce::String& initialText, juce::StringArray buttons,
+                  std::function<void (int buttonIndex, const juce::String& text)> onClose);
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    bool keyPressed (const juce::KeyPress&) override;
+    void parentHierarchyChanged() override;
+    void mouseDown (const juce::MouseEvent&) override {} // swallow clicks behind the panel
+private:
+    void finish (int index);
+    juce::String title, message;
+    juce::TextEditor field;
+    bool hasField;
+    juce::OwnedArray<juce::TextButton> buttons;
+    std::function<void (int, const juce::String&)> onClose;
+    juce::Rectangle<int> panel;
+};
+
 class PossessedEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
@@ -56,7 +78,19 @@ private:
     std::vector<Section> sections;
 
     juce::ComboBox presetBox, distTypeBox, filterTypeBox;
-    juce::TextButton prevButton { "<" }, nextButton { ">" };
+    juce::TextButton prevButton { "<" }, nextButton { ">" }, saveButton { "Save Preset..." }, deleteButton { "Delete" };
+    juce::Array<juce::File> userFiles;
+    int lastPresetVersion = -1;
+    std::unique_ptr<PresetDialog> dialog;
+    static constexpr int kUserIdBase = 1001;
+
+    void refreshPresetBox();
+    void stepPreset (int delta);
+    void promptSave();
+    void confirmDelete();
+    void showDialog (const juce::String& title, const juce::String& message, bool withTextField, const juce::String& initialText,
+                     juce::StringArray buttons, std::function<void (int, const juce::String&)> onResult);
+    void showMessage (const juce::String& title, const juce::String& text);
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> distTypeAtt, filterTypeAtt;
     DemonEyes eyes;
     juce::Image background;

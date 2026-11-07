@@ -36,12 +36,22 @@ public:
 
     std::atomic<float> inLevel { 0.0f }, outLevel { 0.0f }; // for the meters
 
+    // ---- user presets (stored as files, shared by every project and DAW)
+    static juce::File getUserPresetFolder();
+    static juce::Array<juce::File> getUserPresets();
+    static juce::File fileForPresetName (const juce::String& name);
+    bool saveUserPreset (const juce::String& name);
+    bool loadUserPreset (const juce::File& file);
+    juce::String getCurrentPresetName() const { return currentPresetName; }
+    std::atomic<int> presetVersion { 0 }; // bumped whenever a preset is loaded or saved
+
 private:
     void pullParams();
 
     poss::Engine engine;
     std::vector<std::pair<juce::String, std::atomic<float>*>> paramPtrs;
     int currentProgram = 0;
+    juce::String currentPresetName { "Init (Clean)" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PossessedProcessor)
 };
