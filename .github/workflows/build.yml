@@ -25,6 +25,8 @@ jobs:
           name: Possessed-${{ runner.os }}
           path: |
             readme.txt
+            LICENSE.txt
+            THIRD-PARTY-NOTICES.txt
             build/Possessed_artefacts/Release/VST3
             build/Possessed_artefacts/Release/AU
             build/Possessed_artefacts/Release/Standalone
