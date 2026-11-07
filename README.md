@@ -1,6 +1,6 @@
 # Possessed: Pure Vocal Destruction
 
-A Castle Danger MC insert effect (VST3 / AU / Standalone, built with JUCE). It turns a recorded vocal into demons, possessed children, ghosts and worse. Put it on a vocal track, pick a preset, then shape it like a synth.
+A Castle Danger Music Company insert effect (VST3 / AU / Standalone, built with JUCE). It turns a recorded vocal into demons, possessed children, ghosts and worse. Put it on a vocal track, pick a preset, then shape it like a synth.
 
 ## Signal chain
 | Section | What it does |

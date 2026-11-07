@@ -474,8 +474,8 @@ void PossessedEditor::paint (juce::Graphics& g)
 
     g.setColour (ash); g.setFont (font (12.0f));
     g.drawText ("Pure Vocal Destruction  v" JucePlugin_VersionString, 24, 100, 300, 16, juce::Justification::centredLeft);
-    g.setColour (bone); g.setFont (font (13.0f, true));
-    g.drawText ("C A S T L E   D A N G E R   M C", 24, 120, 320, 18, juce::Justification::centredLeft);
+    g.setColour (bone); g.setFont (font (12.0f, true).withExtraKerningFactor (0.18f));
+    g.drawText ("CASTLE DANGER MUSIC COMPANY", 24, 120, 300, 18, juce::Justification::centredLeft, false);
 
     g.setColour (ash); g.setFont (font (11.0f, true));
     g.drawText ("PRESET", presetBox.getX(), presetBox.getY() - 20, 120, 16, juce::Justification::centredLeft);
