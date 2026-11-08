@@ -77,7 +77,7 @@ private:
     std::vector<std::unique_ptr<Knob>> knobs;
     std::vector<Section> sections;
 
-    juce::ComboBox presetBox, distTypeBox, filterTypeBox;
+    juce::ComboBox presetBox, distTypeBox, filterTypeBox, delayTypeBox;
     juce::TextButton prevButton { "<" }, nextButton { ">" }, saveButton { "Save Preset..." }, deleteButton { "Delete" };
     juce::Array<juce::File> userFiles;
     int lastPresetVersion = -1;
@@ -91,7 +91,7 @@ private:
     void showDialog (const juce::String& title, const juce::String& message, bool withTextField, const juce::String& initialText,
                      juce::StringArray buttons, std::function<void (int, const juce::String&)> onResult);
     void showMessage (const juce::String& title, const juce::String& text);
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> distTypeAtt, filterTypeAtt;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> distTypeAtt, filterTypeAtt, delayTypeAtt;
     DemonEyes eyes;
     juce::Image background;
     juce::Rectangle<int> meterArea;

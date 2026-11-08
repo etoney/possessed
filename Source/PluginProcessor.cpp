@@ -49,7 +49,7 @@ APVTS::ParameterLayout PossessedProcessor::createLayout()
     add ("rasp", "Rasp", 0, 1, 0);
     add ("ringMix", "Ring Mix", 0, 1, 0);
     add ("ringFreq", "Ring Freq", 5, 2000, 80, 150, "Hz");
-    choice ("distType", "Distortion Type", { "Tube", "Fuzz", "Bitcrush", "Radio" }, 0);
+    choice ("distType", "Distortion Type", { "Tube", "Fuzz", "Bitcrush", "Radio", "Saturate" }, 0);
     add ("distDrive", "Distortion Drive", 0, 1, 0);
     choice ("filterType", "Filter Type", { "Off", "Low-pass", "Band-pass", "High-pass" }, 0);
     add ("cutoff", "Cutoff", 60, 18000, 2000, 1500, "Hz");
@@ -62,8 +62,11 @@ APVTS::ParameterLayout PossessedProcessor::createLayout()
     add ("delayMix", "Delay Mix", 0, 1, 0);
     add ("delayTime", "Delay Time", 20, 1500, 350, 300, "ms");
     add ("delayFeedback", "Delay Feedback", 0, 0.9f, 0.4f);
+    choice ("delayType", "Delay Type", { "Digital", "Ping-Pong", "Analog", "Tape" }, 1);
     add ("reverbMix", "Reverb Mix", 0, 1, 0);
     add ("reverbSize", "Reverb Size", 0, 1, 0.6f);
+    add ("lofi", "Lo-Fi", 0, 1, 0);
+    add ("lofiNoise", "Lo-Fi Noise", 0, 1, 0);
     add ("mix", "Dry/Wet", 0, 1, 1);
     add ("outputDb", "Output", -36, 12, 0, -1, "dB");
     return { ps.begin(), ps.end() };

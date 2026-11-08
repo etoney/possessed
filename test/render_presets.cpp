@@ -84,6 +84,26 @@ static float zcFreq (const std::vector<float>& v, int sr, size_t from)
     return (float) crossings * (float) sr / (float) (v.size() - from);
 }
 
+// "Clarity": correlation of 10 ms loudness envelopes (output vs. dry voice, latency-aligned).
+// High = the syllable rhythm (and so the words) still come through.
+static double clarity (const std::vector<float>& dry, const std::vector<float>& L, const std::vector<float>& R, int lat, int sr)
+{
+    const int hop = sr / 100; std::vector<double> a, b;
+    for (size_t i = 0; i + (size_t) hop + (size_t) lat < dry.size(); i += (size_t) hop)
+    {
+        double ea = 0, eb = 0;
+        for (int k = 0; k < hop; ++k)
+        {
+            const double d = dry[i + (size_t) k], o = 0.5 * (L[i + (size_t) (k + lat)] + R[i + (size_t) (k + lat)]);
+            ea += d * d; eb += o * o;
+        }
+        a.push_back (std::sqrt (ea / hop)); b.push_back (std::sqrt (eb / hop));
+    }
+    double ma = 0, mb = 0; for (size_t i = 0; i < a.size(); ++i) { ma += a[i]; mb += b[i]; } ma /= (double) a.size(); mb /= (double) b.size();
+    double c = 0, va = 0, vb = 0; for (size_t i = 0; i < a.size(); ++i) { c += (a[i] - ma) * (b[i] - mb); va += (a[i] - ma) * (a[i] - ma); vb += (b[i] - mb) * (b[i] - mb); }
+    return c / std::sqrt (va * vb + 1e-20);
+}
+
 int main (int argc, char** argv)
 {
     const std::string outDir = argc > 1 ? argv[1] : ".";
@@ -119,7 +139,7 @@ int main (int argc, char** argv)
     // --- 3) every preset
     writeWav (outDir + "/00_dry_input.wav", voice, voice, sr);
     const auto& ps = factoryPresets();
-    std::printf ("\n%-22s %8s %8s %8s %6s\n", "preset", "in rms", "out rms", "peak", "x RT");
+    std::printf ("\n%-22s %8s %8s %8s %6s %8s\n", "preset", "in rms", "out rms", "peak", "x RT", "clarity");
     for (size_t pi = 0; pi < ps.size(); ++pi)
     {
         Engine e; for (auto& [id, v] : ps[pi].values) setParam (e.params, id, v);
@@ -133,7 +153,8 @@ int main (int argc, char** argv)
         for (size_t i = 0; i < L.size(); ++i) { if (! std::isfinite (L[i]) || ! std::isfinite (R[i])) bad = true; peak = std::max ({ peak, std::abs (L[i]), std::abs (R[i]) }); }
         std::vector<float> mono (L.size()); for (size_t i = 0; i < L.size(); ++i) mono[i] = 0.5f * (L[i] + R[i]);
         const double rt = (L.size() / (double) sr) / secs;
-        std::printf ("%-22s %8.3f %8.3f %8.3f %6.0f %s\n", ps[pi].name, rms (voice), rms (mono), peak, rt, bad ? "NaN!" : "");
+        const double cl = clarity (voice, L, R, e.getLatency(), sr);
+        std::printf ("%-22s %8.3f %8.3f %8.3f %6.0f %8.2f %s\n", ps[pi].name, rms (voice), rms (mono), peak, rt, cl, bad ? "NaN!" : "");
         allOk &= ! bad && peak < 1.25f && rms (mono) > 0.01;
         char fn[256]; std::snprintf (fn, sizeof fn, "%s/%02zu_%s.wav", outDir.c_str(), pi, ps[pi].name);
         std::string s = fn; for (auto& c : s) if (c == ' ' || c == '(' || c == ')') c = '_';

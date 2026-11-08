@@ -9,17 +9,19 @@ A Castle Danger Music Company insert effect (VST3 / AU / Standalone, built with 
 | **Layer** | A second voice from the same analysis, with its own pitch, formant and level. Use it for a demon an octave below or a ghost an octave above |
 | **Demon** | **Growl**: zero-crossing sub-octave dividers, one and then two octaves down. **Rasp**: jittered vocal-fry pulses and rough modulation |
 | **Ring Mod** | Metallic, inhuman sidebands (5 Hz – 2 kHz) |
-| **Distort** | Tube, Fuzz, Bitcrush, or Radio (band-limited, clipped, crackling) |
+| **Distort** | Tube, Fuzz, Bitcrush, Radio (band-limited, clipped, crackling), or Saturate (warm tape-style grit that keeps the words clear) |
 | **Filter** | Low-, band- or high-pass resonant filter |
 | **Wobble** | Seasick tape warble and flutter |
 | **Legion** | Six drifting, detuned copies spread across the stereo field ("we are many") |
 | **Reverse** | Backwards echoes that swell into each word |
-| **Delay / Reverb** | Ping-pong delay and an 8-line FDN reverb (tails up to ~14 s) |
+| **Delay** | Four types: **Digital** (clean), **Ping-Pong**, **Analog** (darker, saturating repeats with clock drift), **Tape** (wow and flutter, warm and degrading) |
+| **Reverb** | 8-line FDN reverb (tails up to ~14 s) |
+| **Lo-Fi** | Global, applied to the whole output: **Lo-Fi** narrows the bandwidth, adds wobble and saturation, then crushes the bits and sample rate as you turn it up. **Noise** adds tape hiss and crackle |
 | **In / Out** | Input gain, Dry/Wet, Output, meters |
 
 The voice engine auto-matches loudness, so pitch, formant and whisper changes don't make the level jump. Latency is 2048 samples at 44.1/48 kHz (4096 above 60 kHz) and is reported to the host for delay compensation.
 
-**14 factory presets:** Init (Clean), Demon, Disturbed Child, The Haunting, Possessed, Legion, Hellhound, Ghost Whisper, The Entity, Backwards Prayer, Static From Beyond, Old Witch, The Abyss, Siren of the Dead. Changing presets keeps your Input gain.
+**17 factory presets:** Init (Clean), Demon, Lizzy's Playhouse, The Haunting, Possessed, Legion, Hellhound, The Entity, Static From Beyond, Old Witch, Siren of the Dead, Ventriloquist Dummy, Behind You, The Drowned, Found Footage, Cult Chant, Wendigo. Every preset is level-matched and tuned so the words still come through. Changing presets keeps your Input gain.
 
 **Your own presets:** dial in a sound and click **Save Preset...**, then type a name. Saved presets show up under **User Presets** in the preset menu (and in the < > arrows) in every project and every DAW. **Delete** removes the selected user preset. They're stored as small `.possessed` files you can back up or share:
 - macOS: `~/Library/Application Support/Castle Danger/Possessed/Presets/`  (open Finder → Go → Go to Folder…)

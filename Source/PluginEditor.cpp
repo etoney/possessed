@@ -258,8 +258,9 @@ PossessedEditor::PossessedEditor (PossessedProcessor& p)
     sec ("IN / OUT", { makeKnob ("inputDb", "Input"), makeKnob ("mix", "Dry/Wet"), makeKnob ("outputDb", "Output") });
     sec ("LEGION",  { makeKnob ("legion", "Voices"), makeKnob ("legionSpread", "Spread") });
     sec ("REVERSE", { makeKnob ("reverseMix", "Mix"), makeKnob ("reverseLength", "Length") });
-    sec ("DELAY",   { makeKnob ("delayMix", "Mix"), makeKnob ("delayTime", "Time"), makeKnob ("delayFeedback", "Feedback") });
+    sec ("DELAY",   { makeKnob ("delayMix", "Mix"), makeKnob ("delayTime", "Time"), makeKnob ("delayFeedback", "Feedback") }, &delayTypeBox);
     sec ("REVERB",  { makeKnob ("reverbMix", "Mix"), makeKnob ("reverbSize", "Size") });
+    sec ("LO-FI",   { makeKnob ("lofi", "Lo-Fi"), makeKnob ("lofiNoise", "Noise") });
 
     presetBox.onChange = [this]
     {
@@ -280,7 +281,10 @@ PossessedEditor::PossessedEditor (PossessedProcessor& p)
     for (auto* b : { &prevButton, &nextButton, &saveButton, &deleteButton }) addAndMakeVisible (*b);
     refreshPresetBox();
 
-    distTypeBox.addItemList ({ "Tube", "Fuzz", "Bitcrush", "Radio" }, 1);
+    distTypeBox.addItemList ({ "Tube", "Fuzz", "Bitcrush", "Radio", "Saturate" }, 1);
+    delayTypeBox.addItemList ({ "Digital", "Ping-Pong", "Analog", "Tape" }, 1);
+    addAndMakeVisible (delayTypeBox);
+    delayTypeAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.apvts, "delayType", delayTypeBox);
     filterTypeBox.addItemList ({ "Off", "Low-pass", "Band-pass", "High-pass" }, 1);
     addAndMakeVisible (distTypeBox); addAndMakeVisible (filterTypeBox);
     distTypeAtt   = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.apvts, "distType", distTypeBox);
@@ -363,8 +367,8 @@ void PossessedEditor::resized()
     for (int i = 0; i < 3; ++i) layoutSection (sections[(size_t) i], a[(size_t) i]);
     auto b = split (row2, { 1.9f, 1.8f, 2.3f, 1.0f, 3.4f });
     for (int i = 0; i < 5; ++i) layoutSection (sections[(size_t) (3 + i)], b[(size_t) i]);
-    auto c = split (row3, { 2.0f, 2.0f, 3.0f, 2.0f });
-    for (int i = 0; i < 4; ++i) layoutSection (sections[(size_t) (8 + i)], c[(size_t) i]);
+    auto c = split (row3, { 2.0f, 2.0f, 3.0f, 2.0f, 2.0f });
+    for (int i = 0; i < 5; ++i) layoutSection (sections[(size_t) (8 + i)], c[(size_t) i]);
 
     buildBackground();
 }
@@ -449,7 +453,7 @@ void PossessedEditor::buildBackground()
         g.setColour (panel); g.fillRoundedRectangle (rb, 5.0f);
         g.setGradientFill (juce::ColourGradient (juce::Colour (0x18ff2000), rb.getX(), rb.getY(), juce::Colours::transparentBlack, rb.getX(), rb.getY() + 30, false));
         g.fillRoundedRectangle (rb, 5.0f);
-        const bool hot = s.title == "VOICE" || s.title == "DEMON";
+        const bool hot = s.title == "VOICE" || s.title == "DEMON" || s.title == "LO-FI";
         g.setColour (hot ? blood.withAlpha (0.75f) : edge); g.drawRoundedRectangle (rb, 5.0f, 1.0f);
         g.setColour (hot ? bloodHot : ash); g.setFont (font (11.0f, true));
         g.drawText (s.title, s.bounds.reduced (10, 5).removeFromTop (16), juce::Justification::centredLeft);

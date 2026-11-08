@@ -312,8 +312,9 @@ struct Params
     float wobble = 0;
     float legion = 0, legionSpread = 0.5f;
     float reverseMix = 0, reverseLength = 0.5f;
-    float delayMix = 0, delayTime = 350, delayFeedback = 0.4f;
+    float delayMix = 0, delayTime = 350, delayFeedback = 0.4f; int delayType = 1; // Digital, Ping-Pong, Analog, Tape
     float reverbMix = 0, reverbSize = 0.6f;
+    float lofi = 0, lofiNoise = 0;
     float mix = 1, outputDb = 0;
 };
 
@@ -333,7 +334,7 @@ public:
         agcCoef = 1.0f - std::exp (-1.0f / (float) (sr * 0.12)); agcIn = agcOut = 0; agcGain = 1;
 
         for (auto* s : { &sIn, &sOut, &sMix, &sGrowl, &sRasp, &sRing, &sDrive, &sCut, &sRes, &sWob,
-                         &sLeg, &sSpread, &sRev, &sDelMix, &sDelTime, &sDelFb, &sVerbMix, &sLayer })
+                         &sLeg, &sSpread, &sRev, &sDelMix, &sDelTime, &sDelFb, &sVerbMix, &sLayer, &sLofi, &sNoise })
             s->setup (sr, 30.0f);
         sDelTime.setup (sr, 250.0f);
         snapSmoothers();
@@ -348,7 +349,7 @@ public:
         raspNoiseLP.set (sr, 90.0f);
 
         radioHP.set (sr, 450.0f, 0.7f); radioLP.set (sr, 2800.0f, 0.9f);
-        fuzzLP.set (sr, 6500.0f);
+        fuzzLP.set (sr, 6500.0f); satLP.set (sr, 11000.0f);
         mainFilter.reset();
 
         wobDelay.prepare ((int) (sr * 0.05));
@@ -363,6 +364,14 @@ public:
 
         delL.prepare ((int) (sr * 1.6)); delR.prepare ((int) (sr * 1.6));
         delLP_L.set (sr, 4500.0f); delLP_R.set (sr, 4500.0f);
+        delHP_L.set (sr, 120.0f); delHP_R.set (sr, 120.0f);
+        delWow.setup (sr, 0.7f, 0x77u); delFlutter.setup (sr, 9.0f, 0x99u); delDrift.setup (sr, 0.35f, 0x55u);
+        lastDelayType = -1;
+
+        lofiDelL.prepare ((int) (sr * 0.02)); lofiDelR.prepare ((int) (sr * 0.02));
+        lofiWow.setup (sr, 0.55f, 0x3141u); lofiFlutter.setup (sr, 7.0f, 0x2718u);
+        for (auto* f : { &lofiHP[0], &lofiHP[1], &lofiLP[0], &lofiLP[1] }) f->reset();
+        hissLP.set (sr, 5000.0f); crackleEnv = 0; lofiHold = 0; lofiHeld[0] = lofiHeld[1] = 0;
 
         static const int baseLens[8] = { 1559, 1867, 2053, 2251, 2399, 2617, 2797, 3061 };
         for (int i = 0; i < 8; ++i)
@@ -384,6 +393,7 @@ public:
         sCut.reset (p.cutoff); sRes.reset (p.resonance); sWob.reset (p.wobble); sLeg.reset (p.legion);
         sSpread.reset (p.legionSpread); sRev.reset (p.reverseMix); sDelMix.reset (p.delayMix);
         sDelTime.reset (p.delayTime); sDelFb.reset (p.delayFeedback); sVerbMix.reset (p.reverbMix); sLayer.reset (p.layerLevel);
+        sLofi.reset (p.lofi); sNoise.reset (p.lofiNoise);
     }
 
     // In-place stereo processing. R may equal L for mono.
@@ -400,7 +410,7 @@ public:
         sGrowl.t = p.growl; sRasp.t = p.rasp; sRing.t = p.ringMix; sDrive.t = p.distDrive;
         sCut.t = p.cutoff; sRes.t = p.resonance; sWob.t = p.wobble; sLeg.t = p.legion; sSpread.t = p.legionSpread;
         sRev.t = p.reverseMix; sDelMix.t = p.delayMix; sDelTime.t = p.delayTime; sDelFb.t = p.delayFeedback;
-        sVerbMix.t = p.reverbMix; sLayer.t = p.layerLevel;
+        sVerbMix.t = p.reverbMix; sLayer.t = p.layerLevel; sLofi.t = p.lofi; sNoise.t = p.lofiNoise;
 
         const float ringInc = kTwoPi * clampf (p.ringFreq, 1.0f, 5000.0f) / (float) sr;
         const float revLen = clampf (p.reverseLength, 0.1f, 1.5f) * (float) sr;
@@ -411,6 +421,21 @@ public:
         std::array<float, 8> fdnGain;
         for (int i = 0; i < 8; ++i)
             fdnGain[(size_t) i] = std::pow (10.0f, -3.0f * fdnLen[(size_t) i] * sizeScale / ((float) sr * rt60));
+
+        if (p.delayType != lastDelayType)
+        {
+            lastDelayType = p.delayType;
+            const float lpHz = p.delayType == 2 ? 2300.0f : p.delayType == 3 ? 4200.0f : p.delayType == 1 ? 6500.0f : 12000.0f;
+            delLP_L.set (sr, lpHz); delLP_R.set (sr, lpHz);
+        }
+        const float lofiAmt = clampf (p.lofi, 0, 1);
+        for (int c = 0; c < 2; ++c)
+        {
+            lofiHP[c].set (sr, 20.0f * std::pow (17.0f, lofiAmt), 0.7f);
+            lofiLP[c].set (sr, 19000.0f * std::pow (2600.0f / 19000.0f, lofiAmt), 0.75f + 0.5f * lofiAmt);
+        }
+        const float lofiHoldLen = 1.0f + ((float) sr / 6500.0f - 1.0f) * std::pow (clampf ((lofiAmt - 0.3f) / 0.7f, 0, 1), 1.6f);
+        const float lofiLevels = std::pow (2.0f, 15.0f - 9.5f * std::pow (lofiAmt, 1.3f));
 
         const bool stereo = (R != L);
         for (int i = 0; i < n; ++i)
@@ -545,13 +570,36 @@ public:
                 if (rv > 1e-4f) { sL += lastRevL * rv * 1.2f; sR += lastRevR * rv * 1.2f; }
             }
 
-            // ---------------- ping-pong delay
+            // ---------------- delay (Digital / Ping-Pong / Analog / Tape)
             {
                 const float dm = sDelMix.next(), dt = sDelTime.next(), dfb = sDelFb.next();
                 const float ds = std::max (2.0f, dt * 0.001f * (float) sr);
-                const float tL = delL.read (ds), tR = delR.read (ds);
-                delL.push (0.5f * (sL + sR) + delLP_R.lp (tR) * dfb);
-                delR.push (delLP_L.lp (tL) * dfb);
+                const int type = p.delayType;
+                float mod = 0.0f;
+                const float wow = delWow.next(), flut = delFlutter.next(), drift = delDrift.next();
+                if (type == 2) mod = drift * 0.0007f * (float) sr;                                  // BBD clock drift
+                if (type == 3) mod = (wow * 0.0024f + flut * 0.00025f) * (float) sr;               // tape wow + flutter
+                const float tL = delL.read (std::max (2.0f, ds + mod));
+                const float tR = delR.read (std::max (2.0f, ds + mod * 1.07f + (type == 0 ? 0.013f * (float) sr : 0.0f)));
+                const float in = 0.5f * (sL + sR);
+                if (type == 1) // ping-pong
+                {
+                    delL.push (in + delLP_R.lp (tR) * dfb);
+                    delR.push (delLP_L.lp (tL) * dfb);
+                }
+                else if (type == 0) // clean digital, slightly widened
+                {
+                    delL.push (in + delLP_L.lp (tL) * dfb);
+                    delR.push (in + delLP_R.lp (tR) * dfb);
+                }
+                else // analog / tape: darker each repeat and saturating as it builds up
+                {
+                    const float drive = type == 2 ? 1.4f : 1.9f;
+                    float fL = delLP_L.lp (tL) * dfb, fR = delLP_R.lp (tR) * dfb;
+                    if (type == 3) { fL = delHP_L.hp (fL); fR = delHP_R.hp (fR); }
+                    delL.push (std::tanh ((in + fL) * drive) / drive + (type == 2 ? rng.bip() * 0.0004f : 0.0f));
+                    delR.push (std::tanh ((in + fR) * drive) / drive);
+                }
                 sL += tL * dm; sR += tR * dm;
             }
 
@@ -586,6 +634,35 @@ public:
             const float m = sMix.next(), og = sOut.next();
             float outL = (dL * (1.0f - m) + sL * m) * og;
             float outR = (dR * (1.0f - m) + sR * m) * og;
+            // ---------------- global Lo-Fi (worn-out tape / cheap recorder) + noise
+            const float lf = sLofi.next(), nz = sNoise.next();
+            if (lf > 1e-4f)
+            {
+                lofiDelL.push (outL); lofiDelR.push (outR);
+                const float d = (0.004f + lf * (0.0018f * lofiWow.next() + 0.00025f * lofiFlutter.next())) * (float) sr;
+                float y[2] = { lofiDelL.read (d), lofiDelR.read (d) };
+                const float lg = 1.0f + 2.5f * lf;
+                lofiHold += 1.0f;
+                const bool sample = lofiHold >= lofiHoldLen;
+                if (sample) lofiHold -= lofiHoldLen;
+                for (int c = 0; c < 2; ++c)
+                {
+                    float v = lofiLP[c].lp (lofiHP[c].hp (y[c]));
+                    v = std::tanh (v * lg) / lg * (1.0f + 0.6f * lf);
+                    if (sample) lofiHeld[c] = std::round (v * lofiLevels) / lofiLevels;
+                    y[c] = lofiHeld[c];
+                }
+                const float wet = clampf (lf * 4.0f, 0, 1); // fade in so tiny amounts don't click
+                outL += (y[0] - outL) * wet; outR += (y[1] - outR) * wet;
+            }
+            if (nz > 1e-4f)
+            {
+                const float hiss = hissLP.lp (rng.bip()) * 0.012f * nz;
+                if (rng.next() < 0.00025f * nz) crackleEnv = (0.3f + 0.5f * rng.next()) * (rng.next() < 0.5f ? -1.0f : 1.0f);
+                crackleEnv *= 0.8f;
+                const float noiseS = hiss + crackleEnv * 0.25f * nz;
+                outL += noiseS; outR += noiseS * 0.9f + hissLP.z * 0.002f * nz;
+            }
             outL = safety (outL); outR = safety (outR);
             L[i] = outL; if (stereo) R[i] = outR; else L[i] = 0.5f * (outL + outR);
         }
@@ -627,13 +704,20 @@ private:
                 if (crushCount >= hold) { crushCount -= hold; const float levels = std::pow (2.0f, 12.0f - drive * 9.0f); crushHeld = std::round (x * levels) / levels; }
                 return crushHeld;
             }
+            case 4: // Saturate: warm tape-style saturation that keeps the voice intact
+            {
+                const float g2 = 1.0f + drive * 7.0f;
+                const float y = std::tanh (x * g2 + 0.08f * drive) - std::tanh (0.08f * drive);
+                return satLP.lp (y / std::tanh (g2) * (0.9f + 0.4f * drive) * 0.75f);
+            }
             case 3: // Radio from beyond: band-limited, clipped, crackling
             {
                 float y = radioLP.lp (radioHP.hp (x));
                 y = std::tanh (y * gain * 1.5f) * 0.6f;
-                if (rng.next() < 0.0006f * drive) crackle = rng.bip() * 0.4f;
+                const float voiced = clampf (envF * 25.0f, 0.0f, 1.0f); // static rides on the voice, silence stays clean
+                if (rng.next() < 0.0006f * drive * voiced) crackle = rng.bip() * 0.4f;
                 crackle *= 0.97f;
-                return y + crackle * drive + rng.bip() * 0.004f * drive;
+                return y + (crackle + rng.bip() * 0.004f * voiced) * drive;
             }
         }
     }
@@ -642,7 +726,7 @@ private:
     SpectralCore core;
     float agcIn = 0, agcOut = 0, agcGain = 1, agcCoef = 0.0005f;
     DelayLine dryL, dryR;
-    Smooth sIn, sOut, sMix, sGrowl, sRasp, sRing, sDrive, sCut, sRes, sWob, sLeg, sSpread, sRev, sDelMix, sDelTime, sDelFb, sVerbMix, sLayer;
+    Smooth sLofi, sNoise, sIn, sOut, sMix, sGrowl, sRasp, sRing, sDrive, sCut, sRes, sWob, sLeg, sSpread, sRev, sDelMix, sDelTime, sDelFb, sVerbMix, sLayer;
     Rng rng { 0xDEADBEEFu };
 
     // growl
@@ -653,7 +737,7 @@ private:
     // ring
     float ringPh = 0;
     // distortion
-    SVF radioHP, radioLP; OnePole fuzzLP; float crushCount = 0, crushHeld = 0, crackle = 0;
+    SVF radioHP, radioLP; OnePole fuzzLP, satLP; float crushCount = 0, crushHeld = 0, crackle = 0;
     // filter
     SVF mainFilter; int filterCount = 99;
     // wobble
@@ -664,7 +748,10 @@ private:
     // reverse
     DelayLine revBufL, revBufR; float revPhase = 0, lastRevL = 0, lastRevR = 0;
     // delay
-    DelayLine delL, delR; OnePole delLP_L, delLP_R;
+    DelayLine delL, delR; OnePole delLP_L, delLP_R, delHP_L, delHP_R; Drift delWow, delFlutter, delDrift; int lastDelayType = -1;
+    // lo-fi
+    DelayLine lofiDelL, lofiDelR; Drift lofiWow, lofiFlutter; SVF lofiHP[2], lofiLP[2]; OnePole hissLP;
+    float crackleEnv = 0, lofiHold = 0, lofiHeld[2] {};
     // reverb
     std::array<DelayLine, 8> fdn; std::array<float, 8> fdnLen {}; std::array<OnePole, 8> fdnDamp; std::array<Drift, 8> fdnDrift;
     DelayLine verbPre; OnePole verbHP; int verbActive = 0;
