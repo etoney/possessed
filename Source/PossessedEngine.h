@@ -345,7 +345,9 @@ public:
         sub2LP.set (sr, 700.0f, 0.7f); sub2LP.reset();
         envAttack = 1.0f - std::exp (-1.0f / (float) (sr * 0.002));
         envRelease = 1.0f - std::exp (-1.0f / (float) (sr * 0.06));
-        burstDecay = std::exp (-1.0f / (float) (sr * 0.0035));
+        burstDecay = std::exp (-1.0f / (float) (sr * 0.004));
+        creakAttack = 1.0f - std::exp (-1.0f / (float) (sr * 0.0007));
+        raspLP.set (sr, 7500.0f); creakKick = burst = 0;
         raspNoiseLP.set (sr, 90.0f);
 
         radioHP.set (sr, 450.0f, 0.7f); radioLP.set (sr, 2800.0f, 0.9f);
@@ -482,19 +484,23 @@ public:
             }
 
             // ---------------- rasp: creaky vocal-fry pulses + rough AM
+            // Each creak is a smooth bump (fast swell, short decay) rather than an instant jump, so it
+            // sounds like vocal cords rattling instead of clicks.
             const float r = sRasp.next();
             {
                 if (--creakCount <= 0)
                 {
                     creakCount = (int) (sr / (38.0f + 34.0f * rng.next()));
-                    burst = 0.6f + 0.4f * rng.next();
+                    creakKick = 0.6f + 0.4f * rng.next();
                 }
-                burst *= burstDecay;
+                creakKick *= burstDecay;
+                burst += (creakKick - burst) * creakAttack;
                 if (r > 1e-4f)
                 {
-                    const float rough = raspNoiseLP.lp (rng.bip()) * 6.0f;
-                    const float creak = w * (0.15f + 2.2f * burst) * (1.0f + 0.7f * rough);
-                    const float wet = softClip (creak * (1.5f + 2.0f * r)) * (0.55f + 0.2f * r);
+                    const float rough = raspNoiseLP.lp (rng.bip()) * 4.0f;
+                    const float creak = w * (0.15f + 2.6f * burst) * (1.0f + 0.5f * rough);
+                    float wet = softClip (creak * (1.3f + 1.6f * r)) * (0.6f + 0.2f * r);
+                    wet = raspLP.lp (wet);
                     w = w + (wet - w) * r;
                 }
             }
@@ -733,7 +739,7 @@ private:
     SVF trackLP, trackLP2, subLP, sub2LP;
     float envF = 0, envAttack = 0.01f, envRelease = 0.001f, flip1 = 1, flip2 = 1; bool zcHigh = false;
     // rasp
-    int creakCount = 0; float burst = 0, burstDecay = 0.99f; OnePole raspNoiseLP;
+    int creakCount = 0; float burst = 0, creakKick = 0, creakAttack = 0.05f, burstDecay = 0.99f; OnePole raspNoiseLP, raspLP;
     // ring
     float ringPh = 0;
     // distortion
