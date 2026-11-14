@@ -262,6 +262,37 @@ PossessedEditor::PossessedEditor (PossessedProcessor& p)
     sec ("REVERB",  { makeKnob ("reverbMix", "Mix"), makeKnob ("reverbSize", "Size") });
     sec ("LO-FI",   { makeKnob ("lofi", "Lo-Fi"), makeKnob ("lofiNoise", "Noise") });
 
+    // ---- FX rack
+    const char* fxTitles[5] = { "STUTTER", "REPEAT", "TAPE STOP", "FREEZE", "DIVE" };
+    const char* fxOn[5] = { "stutterOn", "repeatOn", "tapeOn", "freezeOn", "diveOn" };
+    for (size_t i = 0; i < 5; ++i)
+    {
+        auto& f = fxSections[i];
+        f.title = fxTitles[i]; f.onParam = fxOn[i];
+        f.power.setTooltip ("Engage " + f.title + " (automatable)");
+        addAndMakeVisible (f.power);
+        f.att = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.apvts, f.onParam, f.power);
+    }
+    fxKnobs[0] = { makeKnob ("stutterSteps", "Steps"), makeKnob ("stutterDepth", "Depth"), makeKnob ("stutterSmooth", "Smooth") };
+    fxKnobs[1] = { makeKnob ("repeatDrop", "Drop") };
+    fxKnobs[2] = { makeKnob ("tapeTime", "Time") };
+    fxKnobs[3] = { makeKnob ("freezeSize", "Size"), makeKnob ("freezeMix", "Mix") };
+    fxKnobs[4] = { makeKnob ("diveAmount", "Amount"), makeKnob ("diveTime", "Time") };
+    for (int i = 0; i < 16; ++i)
+    {
+        steps[(size_t) i].setTooltip ("Step " + juce::String (i + 1) + ": lit = volume cut");
+        addAndMakeVisible (steps[(size_t) i]);
+        stepAtts[(size_t) i] = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.apvts, "step" + juce::String (i), steps[(size_t) i]);
+    }
+    tailsButton.setTooltip ("Let delay and reverb ring through the cut steps");
+    addAndMakeVisible (tailsButton);
+    tailsAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.apvts, "stutterTails", tailsButton);
+    stutterRateBox.addItemList ({ "1/4", "1/8", "1/16", "1/32", "1/8T", "1/16T" }, 1);
+    repeatLengthBox.addItemList ({ "1/4", "1/8", "1/16", "1/32", "1/64" }, 1);
+    addAndMakeVisible (stutterRateBox); addAndMakeVisible (repeatLengthBox);
+    stutterRateAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.apvts, "stutterRate", stutterRateBox);
+    repeatLengthAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.apvts, "repeatLength", repeatLengthBox);
+
     presetBox.onChange = [this]
     {
         const int id = presetBox.getSelectedId();
@@ -290,7 +321,7 @@ PossessedEditor::PossessedEditor (PossessedProcessor& p)
     distTypeAtt   = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.apvts, "distType", distTypeBox);
     filterTypeAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.apvts, "filterType", filterTypeBox);
 
-    setSize (1060, 720);
+    setSize (1180, 850);
     startTimerHz (30);
 }
 
@@ -346,6 +377,7 @@ void PossessedEditor::resized()
     r.removeFromTop (6);
 
     const int gap = 8;
+    auto fxRow = r.removeFromBottom (178); r.removeFromBottom (gap + 10); // room for the FX RACK label
     const int rowH = (r.getHeight() - 2 * gap) / 3;
     auto split = [gap] (juce::Rectangle<int> row, std::vector<float> weights)
     {
@@ -369,6 +401,7 @@ void PossessedEditor::resized()
     for (int i = 0; i < 5; ++i) layoutSection (sections[(size_t) (3 + i)], b[(size_t) i]);
     auto c = split (row3, { 2.0f, 2.0f, 3.0f, 2.0f, 2.0f });
     for (int i = 0; i < 5; ++i) layoutSection (sections[(size_t) (8 + i)], c[(size_t) i]);
+    layoutFxRack (fxRow);
 
     buildBackground();
 }
@@ -447,6 +480,19 @@ void PossessedEditor::buildBackground()
     g.fillRect (0, 0, W, H);
 
     // section panels
+    for (auto& f : fxSections)
+    {
+        auto rb = f.bounds.toFloat();
+        g.setColour (panel); g.fillRoundedRectangle (rb, 5.0f);
+        g.setColour (edge); g.drawRoundedRectangle (rb, 5.0f, 1.0f);
+        g.setColour (ash); g.setFont (font (11.0f, true));
+        g.drawText (f.title, f.bounds.reduced (10, 5).removeFromTop (16), juce::Justification::centredLeft);
+    }
+    if (! fxSections[0].bounds.isEmpty()) // rack label
+    {
+        g.setColour (blood.withAlpha (0.8f)); g.setFont (font (10.0f, true).withExtraKerningFactor (0.3f));
+        g.drawText ("F X   R A C K", fxSections[0].bounds.getX() + 4, fxSections[0].bounds.getY() - 13, 200, 12, juce::Justification::centredLeft);
+    }
     for (auto& s : sections)
     {
         auto rb = s.bounds.toFloat();
@@ -467,6 +513,21 @@ void PossessedEditor::paint (juce::Graphics& g)
 {
     using namespace colours;
     g.drawImageAt (background, 0, 0);
+
+    // FX rack panels light up while engaged
+    for (auto& f : fxSections)
+    {
+        if (! f.power.getToggleState()) continue;
+        auto rb = f.bounds.toFloat();
+        juce::Path pth; pth.addRoundedRectangle (rb, 5.0f);
+        juce::DropShadow (bloodHot.withAlpha (0.45f), 14, {}).drawForPath (g, pth);
+        g.setColour (juce::Colour (0xff1c0806)); g.fillPath (pth);
+        g.setGradientFill (juce::ColourGradient (bloodHot.withAlpha (0.18f), rb.getX(), rb.getY(), juce::Colours::transparentBlack, rb.getX(), rb.getY() + 50, false));
+        g.fillPath (pth);
+        g.setColour (bloodHot); g.strokePath (pth, juce::PathStrokeType (1.2f));
+        g.setColour (bloodHot); g.setFont (font (11.0f, true));
+        g.drawText (f.title, f.bounds.reduced (10, 5).removeFromTop (16), juce::Justification::centredLeft);
+    }
 
     // ---- blood-drip title
     const float alpha = juce::jlimit (0.4f, 1.0f, 1.0f - flicker * 0.7f);
@@ -532,6 +593,13 @@ void PossessedEditor::timerCallback()
 
     if (proc.presetVersion.load() != lastPresetVersion) refreshPresetBox();
     repaint (0, 0, 380, 150);
+
+    const int cur = proc.currentStep.load();
+    const int len = (int) proc.apvts.getRawParameterValue ("stutterSteps")->load();
+    const bool stutOn = fxSections[0].power.getToggleState();
+    for (int i = 0; i < 16; ++i) steps[(size_t) i].setState (i == cur, i < len, stutOn);
+    for (auto& f : fxSections)
+        if (f.power.getToggleState() != f.wasOn) { f.wasOn = f.power.getToggleState(); repaint (f.bounds.expanded (16)); }
     if (! meterArea.isEmpty()) repaint (meterArea);
 }
 
@@ -728,4 +796,97 @@ void PresetDialog::paint (juce::Graphics& g)
     g.drawText (title, r.removeFromTop (30), juce::Justification::centredLeft);
     g.setColour (bone); g.setFont (font (13.0f));
     g.drawFittedText (message, r.removeFromTop (hasField ? 22 : 50), juce::Justification::topLeft, 3);
+}
+
+//==============================================================================
+void PowerButton::paintButton (juce::Graphics& g, bool hi, bool)
+{
+    using namespace colours;
+    auto r = getLocalBounds().toFloat().reduced (1.0f);
+    const bool on = getToggleState();
+    if (on) juce::DropShadow (bloodHot.withAlpha (0.8f), 10, {}).drawForPath (g, [&] { juce::Path p; p.addRoundedRectangle (r, r.getHeight() * 0.5f); return p; }());
+    g.setColour (on ? juce::Colour (0xff5a0a08) : juce::Colour (0xff140a0a));
+    g.fillRoundedRectangle (r, r.getHeight() * 0.5f);
+    g.setColour (on ? bloodHot : (hi ? blood : edge));
+    g.drawRoundedRectangle (r, r.getHeight() * 0.5f, 1.0f);
+    // LED
+    const float d = r.getHeight() * 0.42f;
+    auto led = juce::Rectangle<float> (d, d).withCentre ({ r.getX() + r.getHeight() * 0.55f, r.getCentreY() });
+    if (on) { g.setColour (ember.withAlpha (0.5f)); g.fillEllipse (led.expanded (2.5f)); }
+    g.setColour (on ? juce::Colour (0xffffd0a0) : juce::Colour (0xff3a1a18));
+    g.fillEllipse (led);
+    g.setColour (on ? bone : ash);
+    g.setFont (font (11.0f, true));
+    g.drawText (getButtonText(), r.withTrimmedLeft (r.getHeight() * 0.9f), juce::Justification::centred);
+}
+
+void StepButton::paintButton (juce::Graphics& g, bool hi, bool)
+{
+    using namespace colours;
+    auto r = getLocalBounds().toFloat().reduced (2.0f);
+    const bool cut = getToggleState();
+    const float alpha = active ? 1.0f : 0.3f;
+    if (cut)
+    {
+        g.setGradientFill (juce::ColourGradient (bloodHot.withAlpha (alpha), r.getX(), r.getY(), blood.darker (0.4f).withAlpha (alpha), r.getX(), r.getBottom(), false));
+        g.fillRoundedRectangle (r, 3.0f);
+    }
+    else
+    {
+        g.setColour (juce::Colour (0xff120909).withAlpha (alpha)); g.fillRoundedRectangle (r, 3.0f);
+    }
+    g.setColour ((hi ? bloodHot : edge).withAlpha (alpha)); g.drawRoundedRectangle (r, 3.0f, 1.0f);
+    if (current && running)
+    {
+        juce::Path p; p.addRoundedRectangle (r, 3.0f);
+        juce::DropShadow (ember.withAlpha (0.9f), 8, {}).drawForPath (g, p);
+        g.setColour (bone); g.drawRoundedRectangle (r.reduced (0.5f), 3.0f, 2.0f);
+    }
+}
+
+void PossessedEditor::placeKnobs (const std::vector<Knob*>& ks, juce::Rectangle<int> area)
+{
+    if (ks.empty()) return;
+    const int w = area.getWidth() / (int) ks.size();
+    for (auto* k : ks)
+    {
+        auto cell = area.removeFromLeft (w);
+        k->label.setBounds (cell.removeFromTop (16));
+        k->slider.setBounds (cell);
+    }
+}
+
+void PossessedEditor::layoutFxRack (juce::Rectangle<int> row)
+{
+    const int gap = 8;
+    const float weights[5] = { 5.1f, 1.6f, 1.45f, 2.0f, 2.0f };
+    float total = 0; for (auto w : weights) total += w;
+    const int avail = row.getWidth() - gap * 4;
+    for (size_t i = 0; i < 5; ++i)
+    {
+        const int w = i == 4 ? row.getWidth() : (int) ((float) avail * weights[i] / total);
+        auto b = row.removeFromLeft (w); row.removeFromLeft (gap);
+        auto& f = fxSections[i];
+        f.bounds = b;
+        f.power.setBounds (b.getRight() - 58, b.getY() + 5, 50, 20);
+        auto inner = b.reduced (8).withTrimmedTop (22);
+        if (i == 0) // STUTTER: rate + tails in the header, knobs left, 2x8 step grid right
+        {
+            stutterRateBox.setBounds (f.power.getX() - 84, b.getY() + 5, 76, 20);
+            tailsButton.setBounds (stutterRateBox.getX() - 70, b.getY() + 5, 62, 20);
+            placeKnobs (fxKnobs[i], inner.removeFromLeft (190));
+            inner.removeFromLeft (8);
+            stepArea = inner.withSizeKeepingCentre (inner.getWidth(), std::min (inner.getHeight(), 112));
+            const int cw = stepArea.getWidth() / 8, ch = stepArea.getHeight() / 2;
+            for (int s = 0; s < 16; ++s)
+                steps[(size_t) s].setBounds (stepArea.getX() + (s % 8) * cw + (s % 8 >= 4 ? 3 : 0) - 2, stepArea.getY() + (s / 8) * ch, cw - 2, ch - 2);
+        }
+        else if (i == 1) // REPEAT: length menu, drop knob
+        {
+            repeatLengthBox.setBounds (inner.removeFromTop (22).reduced (4, 0));
+            inner.removeFromTop (4);
+            placeKnobs (fxKnobs[i], inner);
+        }
+        else placeKnobs (fxKnobs[i], inner);
+    }
 }

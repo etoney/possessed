@@ -19,6 +19,19 @@ A Castle Danger Music Company insert effect (VST3 / AU / Standalone, built with 
 | **Lo-Fi** | Global, applied to the whole output: **Lo-Fi** narrows the bandwidth, adds wobble and saturation, then crushes the bits and sample rate as you turn it up. **Noise** adds tape hiss and crackle |
 | **In / Out** | Input gain, Dry/Wet, Output, meters |
 
+## FX rack (bottom row)
+Performance effects for programmed or live mayhem. Each has a glowing **ON** switch. The switches are normal plugin parameters, so you can automate them in your DAW to hit an effect on an exact word or beat. Factory presets leave the FX rack alone, so a pattern you've programmed survives preset browsing. User presets save it.
+
+| Effect | What it does |
+|---|---|
+| **Stutter** | A 16-step sequencer locked to your song's tempo. **Lit steps cut the volume.** **Rate** sets the step size (1/4 to 1/32, plus 1/8T and 1/16T triplets). **Steps** sets the pattern length (1–16, for odd loops); steps past it dim. **Depth** sets how far the volume drops. **Smooth** rounds the edges (low = hard chop, high = pulsing). **Tails** lets delay and reverb ring through the cuts instead of chopping them. The current step glows as it plays |
+| **Repeat** | The classic "s-s-s-stutter": grabs a tempo-synced slice (1/4 to 1/64) the moment you switch it on and loops it. **Drop** shifts the pitch each repeat (negative = sinking and dying, positive = rising panic) |
+| **Tape Stop** | Everything slows and drops in pitch until it grinds to silence. **Time** sets how long that takes. Switch off to snap back |
+| **Freeze** | Holds the last moment as a drifting, slightly detuned drone (a frozen scream) under the vocal. **Size** = grain length (short = buzzy, long = smeared), **Mix** = how loud the frozen sound is |
+| **Dive** | Slides the transformed voice down (or up) by **Amount** semitones over **Time**: a demonic drop at the end of a phrase, or a rising shriek |
+
+Stutter's grid is offset for the plugin's latency, so the cuts land exactly on your song's beats. When the DAW is stopped, it free-runs at the session tempo. Every switch and step edge is crossfaded to avoid clicks.
+
 The voice engine auto-matches loudness, so pitch, formant and whisper changes don't make the level jump. Latency is 2048 samples at 44.1/48 kHz (4096 above 60 kHz) and is reported to the host for delay compensation.
 
 **17 factory presets:** Init (Clean), Demon, Lizzy's Playhouse, The Haunting, Possessed, Legion, Hellhound, The Entity, Static From Beyond, Old Witch, Siren of the Dead, Ventriloquist Dummy, Behind You, The Drowned, Found Footage, Cult Chant, Wendigo. Every preset is level-matched and tuned so the words still come through. Changing presets keeps your Input gain.
@@ -47,4 +60,4 @@ Output goes to `build/Possessed_artefacts/Release/`. See `readme.txt` for instal
 cmake --build build --target possessed_render
 ./build/possessed_render out_dir [your_vocal.wav]
 ```
-This checks pitch accuracy, neutral transparency, NaNs and levels, then renders every preset to WAV. Pass a 16-bit WAV of your own voice to hear the presets on it.
+This checks pitch accuracy, neutral transparency, NaNs, levels and a clarity score, then renders every preset to WAV. `possessed_render_fx out_dir` tests the FX rack (stutter timing, repeat loop accuracy, tape stop, freeze, dive, clicks, random switching) and renders demos. Pass a 16-bit WAV of your own voice to hear the presets on it.

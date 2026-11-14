@@ -26,6 +26,28 @@ private:
     juce::Random rnd;
 };
 
+// Glowing power switch (ON/OFF) for FX rack sections, also used for small option toggles like TAILS
+class PowerButton : public juce::ToggleButton
+{
+public:
+    explicit PowerButton (const juce::String& label = "ON") : juce::ToggleButton (label) {}
+    void paintButton (juce::Graphics&, bool highlighted, bool down) override;
+};
+
+// One step of the stutter sequencer: lit = volume is cut on this step
+class StepButton : public juce::ToggleButton
+{
+public:
+    void paintButton (juce::Graphics&, bool highlighted, bool down) override;
+    void setState (bool isCurrent, bool inRange, bool rackOn)
+    {
+        if (isCurrent != current || inRange != active || rackOn != running)
+        { current = isCurrent; active = inRange; running = rackOn; repaint(); }
+    }
+private:
+    bool current = false, active = true, running = false;
+};
+
 // In-window modal dialog (message, confirm, or text entry), drawn over the editor
 class PresetDialog : public juce::Component
 {
@@ -95,6 +117,20 @@ private:
     DemonEyes eyes;
     juce::Image background;
     juce::Rectangle<int> meterArea;
+
+    // ---- FX rack
+    struct FxSection { juce::String title, onParam; juce::Rectangle<int> bounds; PowerButton power; std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> att; bool wasOn = false; };
+    std::array<FxSection, 5> fxSections;
+    std::array<StepButton, 16> steps;
+    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>, 16> stepAtts;
+    PowerButton tailsButton { "TAILS" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> tailsAtt;
+    juce::ComboBox stutterRateBox, repeatLengthBox;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> stutterRateAtt, repeatLengthAtt;
+    std::array<std::vector<Knob*>, 5> fxKnobs;
+    juce::Rectangle<int> stepArea;
+    void layoutFxRack (juce::Rectangle<int> row);
+    void placeKnobs (const std::vector<Knob*>& ks, juce::Rectangle<int> area);
     float flicker = 0.0f, inMeter = 0.0f, outMeter = 0.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PossessedEditor)

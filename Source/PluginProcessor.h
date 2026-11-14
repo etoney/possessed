@@ -44,9 +44,13 @@ public:
     bool loadUserPreset (const juce::File& file);
     juce::String getCurrentPresetName() const { return currentPresetName; }
     std::atomic<int> presetVersion { 0 }; // bumped whenever a preset is loaded or saved
+    std::atomic<int> currentStep { -1 };  // stutter playhead, for the UI
+    static bool isFxParam (const juce::String& id); // FX rack params are kept when loading factory presets
 
 private:
     void pullParams();
+    void pullFxParams();
+    std::array<std::atomic<float>*, 16> stepPtrs {};
 
     poss::Engine engine;
     std::vector<std::pair<juce::String, std::atomic<float>*>> paramPtrs;

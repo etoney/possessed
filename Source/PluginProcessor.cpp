@@ -18,7 +18,7 @@ APVTS::ParameterLayout PossessedProcessor::createLayout()
             if (sfx == "Hz") return v >= 1000.0f ? String (v / 1000.0f, 1) + " kHz" : String (roundToInt (v)) + " Hz";
             if (sfx == "dB") return String (v, 1) + " dB";
             if (sfx == "s")  return String (v, 2) + " s";
-            if (sfx == "ms") return String (roundToInt (v)) + " ms";
+            if (sfx == "ms") return v < 10.0f ? String (v, 1) + " ms" : String (roundToInt (v)) + " ms";
             return String (roundToInt (v * 100.0f)) + "%";
         };
         auto fromText = [sfx] (const String& t)
@@ -68,6 +68,30 @@ APVTS::ParameterLayout PossessedProcessor::createLayout()
     add ("lofi", "Lo-Fi", 0, 1, 0);
     add ("lofiNoise", "Lo-Fi Noise", 0, 1, 0);
     add ("mix", "Dry/Wet", 0, 1, 1);
+
+    // ---- FX rack (performance effects, each with an automatable ON switch)
+    auto toggle = [&] (const char* id, const char* name, bool def)
+    { ps.push_back (std::make_unique<AudioParameterBool> (ParameterID { id, 1 }, name, def)); };
+    toggle ("stutterOn", "Stutter On", false);
+    choice ("stutterRate", "Stutter Rate", { "1/4", "1/8", "1/16", "1/32", "1/8T", "1/16T" }, 2);
+    ps.push_back (std::make_unique<AudioParameterInt> (ParameterID { "stutterSteps", 1 }, "Stutter Steps", 1, 16, 16));
+    add ("stutterDepth", "Stutter Depth", 0, 1, 1);
+    add ("stutterSmooth", "Stutter Smooth", 0.3f, 30, 3, 5, "ms");
+    toggle ("stutterTails", "Stutter Tails", false);
+    const uint16_t defPattern = 0b1100110010001000;
+    for (int i = 0; i < 16; ++i)
+        toggle (("step" + String (i)).toRawUTF8(), ("Stutter Step " + String (i + 1)).toRawUTF8(), (defPattern >> i) & 1);
+    toggle ("repeatOn", "Repeat On", false);
+    choice ("repeatLength", "Repeat Length", { "1/4", "1/8", "1/16", "1/32", "1/64" }, 2);
+    add ("repeatDrop", "Repeat Drop", -12, 12, 0, -1, "st", 0.1f);
+    toggle ("tapeOn", "Tape Stop On", false);
+    add ("tapeTime", "Tape Stop Time", 0.1f, 4, 0.8f, 0.8f, "s");
+    toggle ("freezeOn", "Freeze On", false);
+    add ("freezeSize", "Freeze Size", 0, 1, 0.4f);
+    add ("freezeMix", "Freeze Mix", 0, 1, 0.7f);
+    toggle ("diveOn", "Dive On", false);
+    add ("diveAmount", "Dive Amount", -24, 24, -12, -1, "st", 0.1f);
+    add ("diveTime", "Dive Time", 0.05f, 4, 1, 0.8f, "s");
     add ("outputDb", "Output", -36, 12, 0, -1, "dB");
     return { ps.begin(), ps.end() };
 }
@@ -80,7 +104,9 @@ PossessedProcessor::PossessedProcessor()
 {
     for (auto* p : getParameters())
         if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
-            paramPtrs.push_back ({ rp->getParameterID(), apvts.getRawParameterValue (rp->getParameterID()) });
+            if (! isFxParam (rp->getParameterID()))
+                paramPtrs.push_back ({ rp->getParameterID(), apvts.getRawParameterValue (rp->getParameterID()) });
+    for (int i = 0; i < 16; ++i) stepPtrs[(size_t) i] = apvts.getRawParameterValue ("step" + juce::String (i));
 }
 
 bool PossessedProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -89,6 +115,30 @@ bool PossessedProcessor::isBusesLayoutSupported (const BusesLayout& layouts) con
     const auto& in = layouts.getMainInputChannelSet();
     if (out != juce::AudioChannelSet::stereo() && out != juce::AudioChannelSet::mono()) return false;
     return in == out || (in == juce::AudioChannelSet::mono() && out == juce::AudioChannelSet::stereo());
+}
+
+bool PossessedProcessor::isFxParam (const juce::String& id)
+{
+    for (auto* prefix : { "stutter", "step", "repeat", "tape", "freeze", "dive" })
+        if (id.startsWith (prefix)) return true;
+    return false;
+}
+
+void PossessedProcessor::pullFxParams()
+{
+    auto& f = engine.fx.p;
+    auto on = [this] (const char* id) { return apvts.getRawParameterValue (id)->load() > 0.5f; };
+    auto val = [this] (const char* id) { return apvts.getRawParameterValue (id)->load(); };
+    f.stutterOn = on ("stutterOn"); f.stutterTails = on ("stutterTails");
+    f.stutterRate = (int) val ("stutterRate"); f.stutterSteps = (int) val ("stutterSteps");
+    f.stutterDepth = val ("stutterDepth"); f.stutterSmooth = val ("stutterSmooth");
+    uint16_t pattern = 0;
+    for (int i = 0; i < 16; ++i) if (stepPtrs[(size_t) i]->load() > 0.5f) pattern |= (uint16_t) (1u << i);
+    f.stutterPattern = pattern;
+    f.repeatOn = on ("repeatOn"); f.repeatLength = (int) val ("repeatLength"); f.repeatDrop = val ("repeatDrop");
+    f.tapeOn = on ("tapeOn"); f.tapeTime = val ("tapeTime");
+    f.freezeOn = on ("freezeOn"); f.freezeSize = val ("freezeSize"); f.freezeMix = val ("freezeMix");
+    f.diveOn = on ("diveOn"); f.diveAmount = val ("diveAmount"); f.diveTime = val ("diveTime");
 }
 
 void PossessedProcessor::pullParams()
@@ -108,6 +158,17 @@ void PossessedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 {
     juce::ScopedNoDenormals noDenormals;
     pullParams();
+    pullFxParams();
+
+    double bpm = 120.0, ppq = -1.0; bool playing = false;
+    if (auto* ph = getPlayHead())
+        if (auto pos = ph->getPosition())
+        {
+            if (auto b = pos->getBpm()) bpm = *b;
+            playing = pos->getIsPlaying();
+            if (auto q = pos->getPpqPosition()) ppq = *q;
+        }
+    engine.fx.setTransport (bpm, ppq, playing);
 
     const int n = buffer.getNumSamples();
     const int inCh = getTotalNumInputChannels();
@@ -117,6 +178,7 @@ void PossessedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     float* L = buffer.getWritePointer (0);
     float* R = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : L;
     engine.process (L, R, n);
+    currentStep.store (engine.fx.currentStep);
     outLevel.store (std::max (outLevel.load() * 0.8f, buffer.getMagnitude (0, n)));
 
     for (int ch = 2; ch < buffer.getNumChannels(); ++ch) buffer.clear (ch, 0, n);
@@ -136,7 +198,7 @@ void PossessedProcessor::setCurrentProgram (int index)
     currentPresetName = poss::factoryPresets()[(size_t) index].name;
     for (auto* p : getParameters())
         if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
-            if (rp->getParameterID() != "inputDb") // keep the user's input gain staging
+            if (rp->getParameterID() != "inputDb" && ! isFxParam (rp->getParameterID())) // keep input gain + FX rack
                 rp->setValueNotifyingHost (rp->getDefaultValue());
     for (auto& [id, v] : poss::factoryPresets()[(size_t) index].values)
         if (auto* rp = apvts.getParameter (id))

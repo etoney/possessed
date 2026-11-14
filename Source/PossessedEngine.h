@@ -7,6 +7,7 @@
 #include <complex>
 #include <cstdint>
 #include <vector>
+#include "FxRack.h"
 
 namespace poss
 {
@@ -322,6 +323,7 @@ class Engine
 {
 public:
     Params params;
+    FxRack fx; // performance effects (fx.p holds their settings)
 
     int getLatency() const { return core.getLatency(); }
 
@@ -385,6 +387,8 @@ public:
         }
         verbPre.prepare ((int) (sr * 0.05));
         verbHP.set (sr, 120.0f);
+        fx.prepare (sr);
+        fx.setLatency (core.getLatency());
     }
 
     void snapSmoothers()
@@ -402,8 +406,9 @@ public:
     void process (float* L, float* R, int n)
     {
         const auto& p = params;
-        core.pitch[0] = semisToRatio (clampf (p.pitch, -24, 24));
-        core.pitch[1] = semisToRatio (clampf (p.layerPitch, -24, 24));
+        fx.updateDive (n);
+        core.pitch[0] = semisToRatio (clampf (p.pitch + fx.diveSemis, -36, 36));
+        core.pitch[1] = semisToRatio (clampf (p.layerPitch + fx.diveSemis, -36, 36));
         core.formant[0] = semisToRatio (clampf (p.formant, -12, 12));
         core.formant[1] = semisToRatio (clampf (p.layerFormant, -12, 12));
         core.whisper = p.whisper;
@@ -576,6 +581,10 @@ public:
                 if (rv > 1e-4f) { sL += lastRevL * rv * 1.2f; sR += lastRevR * rv * 1.2f; }
             }
 
+            // ---------------- stutter, "Tails" position: gate before the echoes so delay/reverb ring through the gaps
+            float tailGate = 1.0f;
+            if (fx.p.stutterTails) { tailGate = fx.stutterGain (i); sL *= tailGate; sR *= tailGate; }
+
             // ---------------- delay (Digital / Ping-Pong / Analog / Tape)
             {
                 const float dm = sDelMix.next(), dt = sDelTime.next(), dfb = sDelFb.next();
@@ -638,8 +647,10 @@ public:
 
             // ---------------- mix + output
             const float m = sMix.next(), og = sOut.next();
-            float outL = (dL * (1.0f - m) + sL * m) * og;
-            float outR = (dR * (1.0f - m) + sR * m) * og;
+            float outL = (dL * tailGate * (1.0f - m) + sL * m) * og;
+            float outR = (dR * tailGate * (1.0f - m) + sR * m) * og;
+            // ---------------- FX rack (Freeze, Repeat, Stutter, Tape Stop)
+            fx.processSample (outL, outR, i);
             // ---------------- global Lo-Fi (worn-out tape / cheap recorder) + noise
             const float lf = sLofi.next(), nz = sNoise.next();
             if (lf > 1e-4f)
@@ -672,6 +683,7 @@ public:
             outL = safety (outL); outR = safety (outR);
             L[i] = outL; if (stereo) R[i] = outR; else L[i] = 0.5f * (outL + outR);
         }
+        fx.endBlock (n);
     }
 
 private:
