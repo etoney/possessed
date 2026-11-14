@@ -1,0 +1,150 @@
+===============================================================================
+  POSSESSED  //  CONTROLS QUICK REFERENCE
+  Castle Danger Music Company  //  Pure Vocal Destruction
+===============================================================================
+
+Possessed is an insert effect. Put it on a vocal track (or any track: guitar,
+synth, drums) like you would an EQ or a reverb.
+
+Controls are listed top to bottom, left to right, the way they're laid out on
+the plugin.
+
+Tip: double-click a value readout under a knob to type an exact number
+(e.g. "-12 st", "350 ms", "2.5 kHz", "40%").
+
+Latency: Possessed delays the audio by 2048 samples (about 43 ms at 48 kHz)
+and reports it to your DAW, which compensates automatically. You'll hear the
+delay only if you monitor a live microphone through it.
+
+
+-------------------------------------------------------------------------------
+HEADER
+-------------------------------------------------------------------------------
+  PRESET MENU (top right)
+      17 factory sounds, plus your own saved presets under USER PRESETS.
+      The < and > arrows step through both lists.
+
+      Init (Clean)        Demon               Lizzy's Playhouse   The Haunting
+      Possessed           Legion              Hellhound           The Entity
+      Static From Beyond  Old Witch           Siren of the Dead   Ventriloquist Dummy
+      Behind You          The Drowned         Found Footage       Cult Chant
+      Wendigo
+
+      Factory presets keep your INPUT knob and leave the FX RACK alone, so a
+      stutter pattern you've programmed survives preset browsing.
+
+  SAVE PRESET...
+      Saves every setting (including the FX rack) under a name you type.
+      Saving with an existing name asks before replacing it.
+
+  DELETE
+      Deletes the selected user preset (asks first). Greyed out for factory
+      presets.
+
+      User presets are .possessed files you can back up or share:
+        macOS:   ~/Library/Application Support/Castle Danger/Possessed/Presets/
+        Windows: %APPDATA%\Castle Danger\Possessed\Presets\
+
+  THE EYES
+      Glow brighter and widen with your signal level. Just for fun (and fear).
+
+
+-------------------------------------------------------------------------------
+VOICE  (the main transformed voice)
+-------------------------------------------------------------------------------
+  PITCH      -24 to +24 semitones. Down = bigger and darker, up = smaller.
+  FORMANT    -12 to +12 semitones. Moves the "size" of the throat without
+             changing the note. Down = huge monster, up = small child or doll.
+             Pitch and formant together decide the character.
+  WHISPER    Turns the voice into a breathy, pitchless whisper.
+
+-------------------------------------------------------------------------------
+LAYER  (a second voice from the same performance)
+-------------------------------------------------------------------------------
+  PITCH / FORMANT   Same as above, for the second voice.
+  LEVEL             How loud the layer is. Try an octave below for a demon
+                    under you, or an octave above for a ghost.
+
+-------------------------------------------------------------------------------
+DEMON
+-------------------------------------------------------------------------------
+  GROWL      Adds sub-octaves: one octave down, then two as you turn it up.
+  RASP       Creaky vocal-fry rattle and roughness.
+
+-------------------------------------------------------------------------------
+RING MOD / DISTORT / FILTER / WOBBLE
+-------------------------------------------------------------------------------
+  RING MOD     MIX and FREQ (5 Hz - 2 kHz). Low = stuttery and robotic,
+               high = metallic and inhuman.
+  DISTORT      Type menu: Tube, Fuzz, Bitcrush, Radio (band-limited and
+               crackling), Saturate (warm grit that keeps words clear).
+               DRIVE sets the amount (0 = off).
+  FILTER       Type menu: Off, Low-pass, Band-pass, High-pass.
+               CUTOFF and RESO (resonance).
+  WOBBLE       WARBLE: seasick tape-style pitch wobble.
+
+-------------------------------------------------------------------------------
+IN / OUT
+-------------------------------------------------------------------------------
+  INPUT      Gain into the plugin (affects how hard distortion is hit).
+  DRY/WET    Blend of your untouched voice and the processed one.
+  OUTPUT     Final level. Meters show input and output.
+
+-------------------------------------------------------------------------------
+LEGION / REVERSE / DELAY / REVERB / LO-FI
+-------------------------------------------------------------------------------
+  LEGION     VOICES: a crowd of drifting, detuned copies ("we are many").
+             SPREAD: how far apart they drift.
+  REVERSE    MIX and LENGTH: backwards echoes that swell into each word.
+  DELAY      Type menu: Digital, Ping-Pong, Analog (darker, gritty repeats),
+             Tape (wobbling, warm, degrading). MIX, TIME, FEEDBACK.
+  REVERB     MIX and SIZE (tails up to about 14 seconds).
+  LO-FI      Global, applied to the whole output.
+             LO-FI: narrows the sound, adds wobble and saturation, then
+             crushes bits and sample rate as you turn it up.
+             NOISE: tape hiss and crackle.
+
+
+===============================================================================
+FX RACK  (bottom row)
+===============================================================================
+Each effect has a glowing ON switch. The switches are normal plugin
+parameters: automate them in your DAW to hit an effect on an exact word or
+beat, or map them to a controller with your DAW's MIDI learn. A section
+lights up while it's engaged.
+
+  STUTTER
+      A 16-step sequencer locked to your song's tempo. LIT STEPS CUT THE
+      VOLUME. Click steps to light them. The current step glows as it plays.
+      RATE (menu)   Step size: 1/4, 1/8, 1/16, 1/32, 1/8T, 1/16T.
+      STEPS         Pattern length, 1-16 (steps past it are dimmed).
+      DEPTH         How far the volume drops on a lit step.
+      SMOOTH        Edge softness: low = hard chop, high = pulsing.
+      TAILS         On: delay and reverb ring through the cuts.
+                    Off: everything is chopped.
+      The cuts land exactly on your DAW's beats. With the DAW stopped, the
+      pattern free-runs at the session tempo.
+
+  REPEAT
+      Grabs a tempo-synced slice the moment you switch it on and loops it
+      ("s-s-s-stutter").
+      LENGTH (menu)  1/4 to 1/64.
+      DROP           Pitch change per repeat. Negative = sinking and dying,
+                     positive = rising panic.
+
+  TAPE STOP
+      Everything slows and drops in pitch until it grinds to silence.
+      TIME   How long it takes to stop. Switch off to snap back.
+
+  FREEZE
+      Holds the last moment as a drifting, slightly detuned drone (a frozen
+      scream) under the vocal.
+      SIZE   Grain length: short = buzzy, long = smeared.
+      MIX    How loud the frozen sound is.
+
+  DIVE
+      Slides the transformed voice down (or up).
+      AMOUNT   -24 to +24 semitones.
+      TIME     How long the slide takes.
+
+===============================================================================

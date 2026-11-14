@@ -2,7 +2,11 @@ name: Build Possessed
 
 on:
   push:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -11,6 +15,7 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Configure
@@ -20,11 +25,35 @@ jobs:
       - name: Build AU (macOS)
         if: runner.os == 'macOS'
         run: cmake --build build --config Release --target Possessed_AU
+      - name: Package release zip (same layout as the site downloads)
+        shell: bash
+        run: |
+          VER=$(sed -n 's/^project(POSSESSED VERSION \([0-9.]*\)).*/\1/p' CMakeLists.txt)
+          OS=$([ "$RUNNER_OS" = "macOS" ] && echo macOS || echo Windows)
+          ZIP="Possessed-v${VER}-${OS}.zip"
+          R=build/Possessed_artefacts/Release
+          mkdir -p pkg/Possessed/VST3 pkg/Possessed/Standalone
+          cp readme.txt controls.txt LICENSE.txt THIRD-PARTY-NOTICES.txt pkg/Possessed/
+          cp -R "$R/VST3/Possessed.vst3" pkg/Possessed/VST3/
+          if [ "$OS" = "macOS" ]; then
+            mkdir -p pkg/Possessed/AU && cp -R "$R/AU/Possessed.component" pkg/Possessed/AU/
+            cp -R "$R/Standalone/Possessed.app" pkg/Possessed/Standalone/
+            (cd pkg && ditto -c -k --sequesterRsrc --keepParent Possessed "../$ZIP")
+          else
+            cp "$R/Standalone/Possessed.exe" pkg/Possessed/Standalone/
+            (cd pkg && 7z a -tzip -mx=9 "../$ZIP" Possessed > /dev/null)   # 7z writes forward-slash paths
+          fi
+          ls -la "$ZIP"
+          BR="downloads-$(echo $OS | tr 'A-Z' 'a-z')"
+          mkdir -p /tmp/dl && cp "$ZIP" /tmp/dl/ && cd /tmp/dl && git init -q -b "$BR" && git add -A
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "$ZIP for ${GITHUB_SHA}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" "$BR"
       - uses: actions/upload-artifact@v4
         with:
           name: Possessed-${{ runner.os }}
           path: |
             readme.txt
+            controls.txt
             LICENSE.txt
             THIRD-PARTY-NOTICES.txt
             build/Possessed_artefacts/Release/VST3
