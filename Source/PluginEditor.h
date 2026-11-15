@@ -9,8 +9,11 @@ public:
     void drawRotarySlider (juce::Graphics&, int x, int y, int w, int h, float pos,
                            float startAngle, float endAngle, juce::Slider&) override;
     void drawComboBox (juce::Graphics&, int w, int h, bool down, int bx, int by, int bw, int bh, juce::ComboBox&) override;
-    juce::Font getComboBoxFont (juce::ComboBox&) override { return juce::Font (juce::FontOptions (13.0f)); }
+    juce::Font getComboBoxFont (juce::ComboBox&) override;
+    juce::Font getTextButtonFont (juce::TextButton&, int h) override;
+    juce::Font getLabelFont (juce::Label& l) override { return l.getFont(); }
     void drawButtonBackground (juce::Graphics&, juce::Button&, const juce::Colour&, bool hi, bool down) override;
+    juce::Image rustDisc;
 };
 
 // A pair of burning demon eyes that watch, blink and flare with the signal.
@@ -100,7 +103,7 @@ private:
     std::vector<Section> sections;
 
     juce::ComboBox presetBox, distTypeBox, filterTypeBox, delayTypeBox;
-    juce::TextButton prevButton { "<" }, nextButton { ">" }, saveButton { "Save Preset..." }, deleteButton { "Delete" };
+    juce::TextButton prevButton { "<" }, nextButton { ">" }, saveButton { "SAVE" }, deleteButton { "DELETE" };
     juce::Array<juce::File> userFiles;
     int lastPresetVersion = -1;
     std::unique_ptr<PresetDialog> dialog;
@@ -115,7 +118,8 @@ private:
     void showMessage (const juce::String& title, const juce::String& text);
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> distTypeAtt, filterTypeAtt, delayTypeAtt;
     DemonEyes eyes;
-    juce::Image background;
+    juce::Image background, logoImage;
+    juce::Rectangle<int> eyesWell, logoArea, badgeArea, crestArea, presetArea, stripeArea, rackLabelArea;
     juce::Rectangle<int> meterArea;
 
     // ---- FX rack
