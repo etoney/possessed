@@ -774,9 +774,10 @@ void PossessedEditor::buildBackground()
         g.setColour (juce::Colours::black.withAlpha (0.8f)); g.drawRect (well, 3.0f);
         g.setColour (juce::Colour (0xff3a2a20)); g.drawRect (well.expanded (3.0f), 3.0f);
         g.setColour (pal::rust.withAlpha (0.5f)); g.drawRect (well.expanded (4.5f), 1.0f);
-        for (float fx : { 0.0f, 0.5f, 1.0f })
-            for (float fy : { 0.0f, 1.0f })
-                rivet (well.getX() + fx * well.getWidth() + (fx == 0.0f ? -1.5f : fx == 1.0f ? 1.5f : 0.0f), well.getY() + fy * well.getHeight() + (fy == 0.0f ? -1.5f : 1.5f), 3.2f);
+        for (int ix = 0; ix < 3; ++ix)
+            for (int iy = 0; iy < 2; ++iy)
+                rivet (well.getX() + (float) ix * 0.5f * well.getWidth() + (float) (ix - 1) * 1.5f,
+                       well.getY() + (float) iy * well.getHeight() + (iy == 0 ? -1.5f : 1.5f), 3.2f);
     }
 
     // FX RACK label stencilled on the rust
@@ -835,14 +836,14 @@ void PossessedEditor::buildBackground()
         // drips running off the bottom of the letters
         juce::GlyphArrangement ga; ga.addLineOfText (f, "POSSESSED", 2.0f, 0.0f);
         const auto wb = ga.getBoundingBox (0, -1, true);
-        float base = textH * 0.8f;   // measured below: the lowest row the letters actually reach
+        float dripTop = textH * 0.8f;   // measured below: the lowest row the letters actually reach
         {
             juce::Image::BitmapData bd (logoImage, juce::Image::BitmapData::readOnly);
             for (int y = bd.height - 1; y >= 0; --y)
             {
                 int solid = 0;
                 for (int x = 0; x < bd.width; x += 2) if (bd.getPixelColour (x, y).getAlpha() > 160) ++solid;
-                if (solid > 6) { base = (float) y / scale; break; }
+                if (solid > 6) { dripTop = (float) y / scale; break; }
             }
         }
         const float x0 = 2.0f, x1 = 2.0f + std::min ((float) lw - 6.0f, wb.getWidth());
@@ -856,8 +857,8 @@ void PossessedEditor::buildBackground()
             const float x = x0 + 8 + drip.nextFloat() * (x1 - x0 - 16);
             const float len = 5.0f + drip.nextFloat() * 14.0f, wdt = 2.0f + drip.nextFloat() * 2.2f;
             dg.setColour (juce::Colour (0xffa0160c));
-            dg.fillRoundedRectangle (x - wdt * 0.5f, base - 5, wdt, len, wdt * 0.5f);
-            dg.fillEllipse (x - wdt * 0.8f, base - 5 + len - wdt, wdt * 1.6f, wdt * 1.9f);
+            dg.fillRoundedRectangle (x - wdt * 0.5f, dripTop - 5, wdt, len, wdt * 0.5f);
+            dg.fillEllipse (x - wdt * 0.8f, dripTop - 5 + len - wdt, wdt * 1.6f, wdt * 1.9f);
         }
 
     }
