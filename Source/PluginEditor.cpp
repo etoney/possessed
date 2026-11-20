@@ -1151,7 +1151,7 @@ void PresetDialog::paint (juce::Graphics& g)
 //==============================================================================
 void PowerButton::paintButton (juce::Graphics& g, bool hi, bool)
 {
-    // indicator lamp + stencilled label on a rusty plate (Dominatrix / Chop Shop style)
+    // indicator lamp + stencilled label on a rusty plate (Dominatrix / Cutthroat style)
     auto r = getLocalBounds().toFloat().reduced (1.0f);
     const bool on = getToggleState();
     const auto lit = pal::signalHot;
